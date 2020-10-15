@@ -33,12 +33,11 @@ func TestSQLFiles(t *testing.T) {
 
 		inputFile := inputDir + "/" + file.Name()
 
-		inBytes, err := ioutil.ReadFile(inputFile)
+		input, err := readInput(inputFile)
 		if err != nil {
 			t.Errorf(fmt.Sprintf("%s", err))
 		}
 
-		input := string(inBytes)
 
 		// Extract the parsing args from the first line of the input
 		// and determine which dialect to use

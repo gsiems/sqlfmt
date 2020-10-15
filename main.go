@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"github.com/gsiems/sql-parse/sqlparse"
@@ -54,7 +56,14 @@ func runapp() (rc int, err error) {
 
 	dialect = resolveDialect(*dialectName)
 
-	fmt.Printf("dialect: %d\n", dialect)
+	var input string
+	input, err = readInput(*inputFile)
+	if err != nil {
+		return 1, err
+	}
+
+	fmt.Printf("dialect:  %d\n", dialect)
+	fmt.Printf("filesize: %d\n", len(input))
 
 	return 0, err
 }
@@ -75,4 +84,19 @@ func resolveDialect(s string) int {
 		return sqlparse.StandardSQL
 	}
 	return d
+}
+
+func readInput(f string) (input string, err error) {
+
+	var inBytes []byte
+
+	switch f {
+	case "", "-":
+		reader := bufio.NewReader(os.Stdin)
+		inBytes, err = ioutil.ReadAll(reader)
+	default:
+		inBytes, err = ioutil.ReadFile(f)
+	}
+
+	return string(inBytes), err
 }
