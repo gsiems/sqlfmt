@@ -82,8 +82,11 @@ func TestSQLFiles(t *testing.T) {
 
 		dialect = resolveDialect(*dialectName)
 
-		// bogus code just to keep things going
-		result := expected + fmt.Sprintf("\n-- dialect id: %d\n", dialect) // make the compare fail
+		var result string
+		result, err = formatInput(input, dialect)
+		if err != nil {
+			t.Errorf(fmt.Sprintf("formatInput failed: %q", err))
+		}
 
 		if strings.Compare(result, expected) != 0 {
 			t.Errorf("Comparison of %s failed", inputFile)

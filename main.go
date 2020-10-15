@@ -62,8 +62,16 @@ func runapp() (rc int, err error) {
 		return 1, err
 	}
 
-	fmt.Printf("dialect:  %d\n", dialect)
-	fmt.Printf("filesize: %d\n", len(input))
+	var formatted string
+	formatted, err = formatInput(input, dialect)
+	if err != nil {
+		return 1, err
+	}
+
+	err = writeOutput(*outputFile, formatted)
+	if err != nil {
+		return 1, err
+	}
 
 	return 0, err
 }
@@ -111,4 +119,11 @@ func writeOutput(f, output string) (err error) {
 	}
 
 	return err
+}
+
+func formatInput(input string, dialect int) (formatted string, err error) {
+
+	formatted = input
+
+	return formatted, err
 }
