@@ -1,1 +1,1 @@
-# sql-fmt
+# sqlfmt
