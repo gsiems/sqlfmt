@@ -19,4 +19,4 @@ coverage.html
 *~
 
 # Failed test results
-testing/failed/*sql
+testdata/failed/*sql

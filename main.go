@@ -100,3 +100,15 @@ func readInput(f string) (input string, err error) {
 
 	return string(inBytes), err
 }
+
+func writeOutput(f, output string) (err error) {
+
+	switch f {
+	case "", "-":
+		fmt.Print(output)
+	default:
+		err = ioutil.WriteFile(f, []byte(output), 0644)
+	}
+
+	return err
+}
