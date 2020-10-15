@@ -46,7 +46,7 @@ func TestSQLFiles(t *testing.T) {
 		args := strings.Split(strings.Replace(l1, "-", "", 2), ",")
 
 		*indentSz = 4
-		*dialectName = "standard"
+		*dialectName = "none"
 		*keyCase = "upper"
 		*preserveCase = false
 		*preserveQuotes = false
