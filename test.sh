@@ -8,7 +8,7 @@ BaseDir=$(dirname "$0")
 
     [ -f "$coverageFile" ] && rm "$coverageFile"
     [ -f "$coverageHtml" ] && rm "$coverageHtml"
-    find "./testdata/result" -type f -exec rm {} \;
+    find "./testdata/failed" -type f -name "*.sql" -exec rm {} \;
 
     echo ""
     echo "### gocyclo:"
