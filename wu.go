@@ -117,3 +117,14 @@ func (n *wu) isComment() bool {
 	}
 	return false
 }
+
+func (n *wu) newPDepth(i int) int {
+
+	switch n.token.Value() {
+	case "(":
+		i++
+	case ")":
+		i--
+	}
+	return i
+}

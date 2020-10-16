@@ -133,7 +133,12 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 
 	//
 	var Priv priv
+	var DML dml
 	err = Priv.tag(&q)
+	if err != nil {
+		return formatted, err
+	}
+	err = DML.tag(&q)
 	if err != nil {
 		return formatted, err
 	}
