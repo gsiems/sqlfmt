@@ -14,8 +14,8 @@ type priv struct {
 	state int
 }
 
-/* isStart returns true if the current token is a valid starting
-token for a privilege statement.
+/* isStart returns true if the current token  appears to be the valid
+starting token for a privilege statement.
 
 */
 func (p *priv) isStart(items [2]wu) bool {
@@ -38,8 +38,8 @@ func (p *priv) isStart(items [2]wu) bool {
 	return false
 }
 
-/* isEnd returns true if the current token appears to be the
-valid ending token for a privilege statement.
+/* isEnd returns true if the current token appears to be the valid
+ending token for a privilege statement.
 
 */
 func (p *priv) isEnd(items [2]wu) bool {
@@ -50,8 +50,8 @@ func (p *priv) isEnd(items [2]wu) bool {
 	return false
 }
 
-/* tag iterates through the queue and tags the tokens that are
-believed to belong to privilege statements.
+/* tag iterates through the queue and tags the tokens that are believed
+to belong to privilege statements.
 
 */
 func (o *priv) tag(q *queue) (err error) {
