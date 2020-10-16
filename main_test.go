@@ -83,9 +83,9 @@ func TestSQLFiles(t *testing.T) {
 		dialect = resolveDialect(*dialectName)
 
 		var result string
-		result, err = formatInput(input, dialect)
+		result, err = runFormatter(input, dialect)
 		if err != nil {
-			t.Errorf(fmt.Sprintf("formatInput failed: %q", err))
+			t.Errorf(fmt.Sprintf("runFormatter failed: %q", err))
 		}
 
 		if strings.Compare(result, expected) != 0 {

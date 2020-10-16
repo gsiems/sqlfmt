@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/gsiems/sql-parse/sqlparse"
 )
@@ -63,7 +64,7 @@ func runapp() (rc int, err error) {
 	}
 
 	var formatted string
-	formatted, err = formatInput(input, dialect)
+	formatted, err = runFormatter(input, dialect)
 	if err != nil {
 		return 1, err
 	}
@@ -121,9 +122,29 @@ func writeOutput(f, output string) (err error) {
 	return err
 }
 
-func formatInput(input string, dialect int) (formatted string, err error) {
+func runFormatter(input string, dialect int) (formatted string, err error) {
 
-	formatted = input
+	var q queue
+	tokens := sqlparse.ParseStatements(input, dialect)
+	q, err = initialzeQueue(tokens)
+	if err != nil {
+		return formatted, err
+	}
+
+	//
+	var Priv priv
+	err = Priv.tag(&q)
+	if err != nil {
+		return formatted, err
+	}
+
+	// temp for validating tagging to this point
+	var s []string
+	for _, v := range q.items {
+		s = append(s, fmt.Sprintf("%v: %q", v.Type, v.token.Value()))
+	}
+
+	formatted = strings.Join(s, "\n")
 
 	return formatted, err
 }
