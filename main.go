@@ -138,14 +138,14 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 	}
 
 	//
-	var fPriv priv
+	var fDCL dcl
 	var fDML dml
 	var fDDL ddl
 	var fPLPgSQL plpgsql
 	var fPLSQL plsql
 
 	// tag
-	err = fPriv.tag(&q)
+	err = fDCL.tag(&q)
 	if err != nil {
 		return formatted, err
 	}
@@ -173,7 +173,7 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 	}
 
 	// leading space, format
-	err = fPriv.format(&q)
+	err = fDCL.format(&q)
 	if err != nil {
 		return formatted, err
 	}
@@ -187,7 +187,7 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 	for _, v := range q.items {
 
 		switch v.Type {
-		case Privilege, DDL:
+		case DCL, DDL:
 
 			nl := strings.Repeat("\n", v.vertSp)
 			ind := strings.Repeat(ident, v.indents)

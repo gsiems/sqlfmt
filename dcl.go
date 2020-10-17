@@ -1,6 +1,6 @@
 package main
 
-/* Tag and format (GRANT/REVOKE) privilege statements
+/* Tag and format DCL (GRANT/REVOKE) statements
 
  */
 
@@ -10,15 +10,15 @@ import (
 	"github.com/gsiems/sql-parse/sqlparse"
 )
 
-type priv struct {
+type dcl struct {
 	state int
 }
 
 /* isStart returns true if the current token  appears to be the valid
-starting token for a privilege statement.
+starting token for a DCL statement.
 
 */
-func (p *priv) isStart(items [2]wu) bool {
+func (p *dcl) isStart(items [2]wu) bool {
 
 	switch dialect {
 	case sqlparse.Oracle:
@@ -39,10 +39,10 @@ func (p *priv) isStart(items [2]wu) bool {
 }
 
 /* isEnd returns true if the current token appears to be the valid
-ending token for a privilege statement.
+ending token for a DCL statement.
 
 */
-func (p *priv) isEnd(items [2]wu) bool {
+func (p *dcl) isEnd(items [2]wu) bool {
 	switch items[0].token.Value() {
 	case ";":
 		return true
@@ -51,10 +51,10 @@ func (p *priv) isEnd(items [2]wu) bool {
 }
 
 /* tag iterates through the queue and tags the tokens that are believed
-to belong to privilege statements.
+to belong to DCL statements.
 
 */
-func (o *priv) tag(q *queue) (err error) {
+func (o *dcl) tag(q *queue) (err error) {
 
 	var items [2]wu
 	currType := Unknown
@@ -63,14 +63,14 @@ func (o *priv) tag(q *queue) (err error) {
 		items[0] = q.items[i]
 		if q.items[i].Type == Unknown {
 			switch {
-			case currType == Privilege:
-				q.items[i].Type = Privilege
+			case currType == DCL:
+				q.items[i].Type = DCL
 				if o.isEnd(items) {
 					currType = Unknown
 				}
 			case o.isStart(items):
-				currType = Privilege
-				q.items[i].Type = Privilege
+				currType = DCL
+				q.items[i].Type = DCL
 			}
 		}
 
@@ -83,17 +83,17 @@ func (o *priv) tag(q *queue) (err error) {
 }
 
 /* format iterates through the queue and determines the formatting for the
-work units that are tagged as privilege statements.
+work units that are tagged as DCL statements.
 
 */
-func (o *priv) format(q *queue) (err error) {
+func (o *dcl) format(q *queue) (err error) {
 
 	var items [2]wu
 
 	for i := 0; i < len(q.items); i++ {
 		items[0] = q.items[i]
 
-		if q.items[i].Type == Privilege {
+		if q.items[i].Type == DCL {
 			indents := 1
 
 			// check for new line requirements

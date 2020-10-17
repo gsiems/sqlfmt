@@ -23,7 +23,8 @@ func (p *dml) isStart(items [2]wu) bool {
 		return true
 	case "UPDATE", "INSERT", "UPSERT", "DELETE":
 		switch strings.ToUpper(items[1].token.Value()) {
-		case "BEFORE", "AFTER", "OF":
+		// trigger: (BEFORE|AFTER|INSTEAD OF) (UPDATE|INSERT|DELETE|UPSERT?) ON
+        case "BEFORE", "AFTER", "OF":
 			return false
 		}
 		return true

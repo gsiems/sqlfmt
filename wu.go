@@ -13,7 +13,7 @@ type WuType int
 const (
 	// work unit types
 	Unknown   WuType = iota // A workunit that hasn't been tagged (unknown type)
-	Privilege               // A work unit that belongs to a (GRANT/REVOKE) privilege statement
+	DCL               // A work unit that belongs to a DCL (GRANT/REVOKE) statement
 	DDL                     // A work unit that belongs to a DDL statement
 	DML                     // A work unit that belongs to a DML statement
 	PL                      // A work unit that belongs to a section of Procedural Language
@@ -38,7 +38,7 @@ func (e WuType) String() string {
 
 	var names = map[WuType]string{
 		Unknown:   "Unknown",
-		Privilege: "Privilege",
+		DCL: "DCL",
 		DDL:       "DDL",
 		DML:       "DML",
 		PL:        "PL",
