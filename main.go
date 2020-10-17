@@ -194,6 +194,8 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 			sp := strings.Repeat(" ", v.leadSp)
 			s = append(s, fmt.Sprintf("%s%s%s%s", nl, ind, sp, v.value))
 
+		case Final:
+			s = append(s, "\n")
 		default:
 			s = append(s, fmt.Sprintf("\n%v [%d, %d, %d]: %q", v.Type, v.vertSp, v.indents, v.leadSp, v.token.Value()))
 		}

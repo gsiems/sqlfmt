@@ -98,6 +98,8 @@ func (o *ddl) format(q *queue) (err error) {
 					// nada
 				case strings.HasSuffix(items[1].token.Value(), "."):
 					// nada
+				case i == 0:
+					// nada
 				default:
 					q.items[i].leadSp = 1
 				}

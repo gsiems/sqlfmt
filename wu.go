@@ -106,6 +106,8 @@ func initialzeQueue(tokens sqlparse.Tokens) (q queue, err error) {
 		return q, err
 	}
 
+	q.items = append(q.items, wu{Type: Final})
+
 	return q, err
 }
 
