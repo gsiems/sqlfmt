@@ -21,6 +21,11 @@ starting token for a DCL statement.
 func (p *dcl) isStart(items [2]wu) bool {
 
 	switch dialect {
+	case sqlparse.PostgreSQL:
+		switch strings.ToUpper(items[0].token.Value()) {
+		case "GRANT", "REVOKE", "REASSIGN":
+			return true
+		}
 	case sqlparse.Oracle:
 		switch strings.ToUpper(items[0].token.Value()) {
 		case "GRANT":
