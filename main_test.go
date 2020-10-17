@@ -63,8 +63,6 @@ func TestSQLFiles(t *testing.T) {
 				key := strings.Trim(kv[0], " ")
 				value := strings.Trim(kv[1], " ")
 
-				fmt.Printf("%q:%q\n", key, value)
-
 				switch key {
 				case "indent":
 					*indentSz, _ = strconv.Atoi(value)
@@ -81,6 +79,8 @@ func TestSQLFiles(t *testing.T) {
 		}
 
 		dialect = resolveDialect(*dialectName)
+
+		fmt.Printf("File: %s, Dialect: (%q, %d)\n", file.Name(), *dialectName, dialect)
 
 		var result string
 		result, err = runFormatter(input, dialect)

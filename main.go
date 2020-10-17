@@ -134,6 +134,7 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 	//
 	var Priv priv
 	var DML dml
+	var PLPgSQL plpgsql
 	err = Priv.tag(&q)
 	if err != nil {
 		return formatted, err
@@ -141,6 +142,14 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 	err = DML.tag(&q)
 	if err != nil {
 		return formatted, err
+	}
+
+	switch dialect {
+	case sqlparse.PostgreSQL:
+		err = PLPgSQL.tag(&q)
+		if err != nil {
+			return formatted, err
+		}
 	}
 
 	// temp for validating tagging to this point
