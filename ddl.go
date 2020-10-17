@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/gsiems/sql-parse/sqlparse"
+)
 
 type ddl struct {
 	state int
@@ -15,6 +19,10 @@ func (p *ddl) isStart(items [2]wu) bool {
 	switch strings.ToUpper(items[0].token.Value()) {
 	case "CREATE", "ALTER", "DROP", "COMMENT":
 		return true
+	case "SET":
+		if dialect == sqlparse.PostgreSQL {
+			return true
+		}
 	}
 	return false
 }
@@ -113,8 +121,18 @@ func (o *ddl) format(q *queue) (err error) {
 			//q.items[i].value = formatValue()
 		}
 
-		if items[0].token.Value() == ";" {
+		/* If the code is creating a PostgreSQL PL/PgSQL, or
+		   Oracle PL/SQL, object then there will be no [available]
+		   trailing semi-colon to use for identifying the end of the DDL.
+		*/
+		switch {
+		case items[0].token.Value() == ";":
 			inDDL = false
+		case items[1].Type == PL:
+			switch items[1].token.Value() {
+			case "/", ";":
+				inDDL = false
+			}
 		}
 
 		if !items[0].isComment() {
