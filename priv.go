@@ -5,6 +5,7 @@ package main
  */
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gsiems/sql-parse/sqlparse"
@@ -82,7 +83,7 @@ func (o *priv) tag(q *queue) (err error) {
 	return err
 }
 
-/* tag iterates through the queue and determines the formatting for the
+/* format iterates through the queue and determines the formatting for the
 work units that are tagged as privilege statements.
 
 */
@@ -116,8 +117,8 @@ func (o *priv) format(q *queue) (err error) {
 				vertSp = maxInt(vertSp, 1)
 			case newLineAllowed:
 				vertSp = vertSp
-			default:
-				vertSp = 0
+            default:
+                vertSp = 0
 			}
 
 			if vertSp == 0 {
