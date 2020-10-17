@@ -55,6 +55,12 @@ func runapp() (rc int, err error) {
 	}
 	flag.Parse()
 
+	if *indentSz == 0 {
+		ident = "\t"
+	} else {
+		ident = strings.Repeat(" ", *indentSz)
+	}
+
 	dialect = resolveDialect(*dialectName)
 
 	var input string
@@ -134,8 +140,11 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 	//
 	var Priv priv
 	var DML dml
+	var DDL ddl
 	var PLPgSQL plpgsql
 	var PLSQL plsql
+
+	// tag
 	err = Priv.tag(&q)
 	if err != nil {
 		return formatted, err
@@ -158,13 +167,35 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 		}
 	}
 
+	err = DDL.tag(&q)
+	if err != nil {
+		return formatted, err
+	}
+
+	// leading space, format
+	err = Priv.format(&q)
+	if err != nil {
+		return formatted, err
+	}
+
 	// temp for validating tagging to this point
 	var s []string
 	for _, v := range q.items {
-		s = append(s, fmt.Sprintf("%v: %q", v.Type, v.token.Value()))
+
+		switch v.Type {
+		case Privilege:
+
+			nl := strings.Repeat("\n", v.vertSp)
+			ind := strings.Repeat(ident, v.indents)
+			sp := strings.Repeat(" ", v.leadSp)
+			s = append(s, fmt.Sprintf("%s%s%s%s", nl, ind, sp, v.value))
+
+		default:
+		 s = append(s, fmt.Sprintf("\n%v [%d, %d, %d]: %q", v.Type, v.vertSp, v.indents, v.leadSp, v.token.Value()))
+		}
 	}
 
-	formatted = strings.Join(s, "\n")
+	formatted = strings.Join(s, "")
 
 	return formatted, err
 }

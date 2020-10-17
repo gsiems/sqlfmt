@@ -28,9 +28,8 @@ un-formatted sqlparse token or the results of formatting actions
 type wu struct {
 	Type    WuType
 	vertSp  int    // number of newlines (vertical space) before the work unit
-	pDepth  int    // the depth/count of open parens before the work unit
-	indents int    // the number of (non-pDepth) indentation units before the work unit
-	leadSp  string // the (non-indent/non-newline) whitespace before the value
+	indents int    // the number of indentation units before the work unit
+	leadSp  int    // the number of leading spaces before the value
 	value   string // the formatted contents of the work unit
 	token   sqlparse.Token
 }
@@ -118,6 +117,15 @@ func (n *wu) isComment() bool {
 	return false
 }
 
+func (n *wu) isLineComment() bool {
+	switch n.token.Type() {
+	case sqlparse.LineCommentToken, sqlparse.PoundLineCommentToken:
+		return true
+	}
+	return false
+}
+
+
 func (n *wu) newPDepth(i int) int {
 
 	switch n.token.Value() {
@@ -127,4 +135,14 @@ func (n *wu) newPDepth(i int) int {
 		i--
 	}
 	return i
+}
+
+func (n *wu) verticalSpace(maxVSp int) (vSp int) {
+	vSp = strings.Count(n.token.WhiteSpace(), "\n")
+	if maxVSp > 0 {
+		if vSp > maxVSp {
+			return maxVSp
+		}
+	}
+	return vSp
 }

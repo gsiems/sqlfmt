@@ -5,6 +5,7 @@ package main
  */
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gsiems/sql-parse/sqlparse"
@@ -78,6 +79,72 @@ func (o *priv) tag(q *queue) (err error) {
 			items[1] = items[0]
 		}
 
+	}
+	return err
+}
+
+/* formatPrivs takes a queue of privilege statement nits and returns
+the formatted result
+
+*/
+func (o *priv) format(q *queue) (err error) {
+
+	var items [2]wu
+
+	for i := 0; i < len(q.items); i++ {
+		items[0] = q.items[i]
+
+		if q.items[i].Type == Privilege {
+			indents := 1
+
+			// check for new line requirements
+			nlChk := noNewLine
+			switch {
+			case i == 0:
+				// nada
+			case o.isStart(items):
+				nlChk = newLineRequired
+				indents = 0
+			default:
+				// check for comment
+				nlChk = chkCommentNL(q.items[i], q.items[i-1], nlChk)
+			}
+
+			// vertical spaces
+			vertSp := items[0].verticalSpace(2)
+			switch nlChk {
+			case newLineRequired:
+				vertSp = maxInt(vertSp, 1)
+			case newLineAllowed:
+				vertSp = vertSp
+            default:
+                vertSp = 0
+			}
+
+			if vertSp == 0 {
+				switch {
+				case items[0].token.Value() == ",":
+					// nada
+				case strings.HasPrefix(items[0].token.Value(), "."):
+					// nada
+				case strings.HasSuffix(items[1].token.Value(), "."):
+					// nada
+				default:
+					q.items[i].leadSp = 1
+				}
+
+			} else {
+				q.items[i].vertSp = vertSp
+				q.items[i].indents = indents
+			}
+
+			q.items[i].value = items[0].token.Value()
+			//q.items[i].value = formatValue()
+		}
+
+		if !items[0].isComment() {
+			items[1] = items[0]
+		}
 	}
 	return err
 }
