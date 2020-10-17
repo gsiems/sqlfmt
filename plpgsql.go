@@ -1,6 +1,6 @@
 package main
 
-/* Tag and format PostgreSQL PL/PgSGL functions and procedures
+/* Tag and format PostgreSQL PL/PgSQL functions and procedures
 
 [CREATE [ OR REPLACE] <PL/PgSQL type> [( ... )] [...] AS $tag$ <PL/PgSQL code> $tag$
 
