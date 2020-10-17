@@ -2,8 +2,6 @@ package main
 
 import (
 	"strings"
-
-	"github.com/gsiems/sql-parse/sqlparse"
 )
 
 type ddl struct {
@@ -19,10 +17,8 @@ func (p *ddl) isStart(items [2]wu) bool {
 	switch strings.ToUpper(items[0].token.Value()) {
 	case "CREATE", "ALTER", "DROP", "COMMENT":
 		return true
-	case "SET":
-		if dialect == sqlparse.PostgreSQL {
-			return true
-		}
+	case "SET", "SHOW":
+		return true
 	}
 	return false
 }
