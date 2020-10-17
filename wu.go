@@ -125,7 +125,6 @@ func (n *wu) isLineComment() bool {
 	return false
 }
 
-
 func (n *wu) newPDepth(i int) int {
 
 	switch n.token.Value() {

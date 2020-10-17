@@ -191,7 +191,7 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 			s = append(s, fmt.Sprintf("%s%s%s%s", nl, ind, sp, v.value))
 
 		default:
-		 s = append(s, fmt.Sprintf("\n%v [%d, %d, %d]: %q", v.Type, v.vertSp, v.indents, v.leadSp, v.token.Value()))
+			s = append(s, fmt.Sprintf("\n%v [%d, %d, %d]: %q", v.Type, v.vertSp, v.indents, v.leadSp, v.token.Value()))
 		}
 	}
 
