@@ -44,6 +44,7 @@ import (
 
 type plpgsql struct {
 	state int
+	pgt   string
 }
 
 /* isStart returns true if the current token appears to be the valid
@@ -66,9 +67,11 @@ valid ending token for a PL block.
 
 */
 func (o *plpgsql) isEnd(items [2]wu) bool {
-	switch items[0].token.Value() {
-	case ";":
-		return true
+	if o.pgt != "" {
+		if items[0].token.Value() == ";" && items[1].token.Value() == o.pgt {
+			o.pgt = ""
+			return true
+		}
 	}
 	return false
 }
@@ -81,7 +84,6 @@ ASSERTION: The DML tokens have already been tagged
 */
 func (o *plpgsql) tag(q *queue) (err error) {
 
-	var pgt string
 	var lineNo int
 	var lParens int
 	var items [2]wu
@@ -94,22 +96,25 @@ func (o *plpgsql) tag(q *queue) (err error) {
 
 		if q.items[i].Type == Unknown {
 
-			switch {
-			case o.isStart(items):
-				currType = PL
+			switch currType {
+			case Unknown:
+				if o.isStart(items) {
+					currType = PL
+					q.items[i].Type = PL
+				}
+			case PL:
 				q.items[i].Type = PL
-			case currType == PL:
+
 				lParens = items[0].newPDepth(lParens)
 				if lParens < 0 {
 					err := errors.New(fmt.Sprintf("Extra closing parens detected on line %d while tagging PL/PgSQL", lineNo))
 					return err
 				}
 
-				q.items[i].Type = PL
-
 				// look for the opening/closing PL tag
 				switch {
-				case items[0].token.Value() == pgt && pgt != "":
+				case o.isEnd(items):
+					currType = Unknown
 					if lParens > 0 {
 						err := errors.New(fmt.Sprintf("Extra open parens detected on line %d while tagging PL/PgSQL", lineNo))
 						return err
@@ -117,11 +122,9 @@ func (o *plpgsql) tag(q *queue) (err error) {
 				case lParens == 0:
 					if strings.ToUpper(items[1].token.Value()) == "AS" {
 						if strings.HasPrefix(items[0].token.Value(), "$") && strings.HasSuffix(items[0].token.Value(), "$") {
-							pgt = items[0].token.Value()
+							o.pgt = items[0].token.Value()
 						}
 					}
-				case o.isEnd(items):
-					currType = Unknown
 				}
 			}
 		}
