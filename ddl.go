@@ -1,8 +1,10 @@
 package main
 
-/* Tag and format mostly DDL statements
+/* Tag and format mostly DDL statements. Since DDL is the last thing
+tagged it also includes some things that aren't really DDL but that
+don't belong in the previous categories either.
 
- */
+*/
 
 import (
 	"strings"
@@ -21,7 +23,7 @@ func (p *ddl) isStart(items [2]wu) bool {
 	switch strings.ToUpper(items[0].token.Value()) {
 	case "CREATE", "ALTER", "DROP", "COMMENT":
 		return true
-	case "SET", "SHOW":
+	case "SET", "SHOW": // not really DDL
 		return true
 	}
 	return false
@@ -122,8 +124,13 @@ func (o *ddl) format(q *queue) (err error) {
 		}
 
 		/* If the code is creating a PostgreSQL PL/PgSQL, or
-		   Oracle PL/SQL, object then there will be no [available]
-		   trailing semi-colon to use for identifying the end of the DDL.
+		Oracle PL/SQL, object then there will be no [available]
+		trailing semi-colon to use for identifying the end of the DDL.
+
+		Also, with Oracle SQL-Plus scripts the SET command may not
+		have a trailing semi-colon either. It appears that the new
+		line is the terminator. SHOW behaves similarly?
+
 		*/
 		switch {
 		case items[0].token.Value() == ";":
