@@ -1,5 +1,9 @@
 package main
 
+/* Tag and format mostly DDL statements
+
+ */
+
 import (
 	"strings"
 )

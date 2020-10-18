@@ -1,6 +1,6 @@
 package main
 
-/* Tag and format DML statements
+/* Tag and format mostly DML statements
 
  */
 
