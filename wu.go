@@ -147,3 +147,9 @@ func (n *wu) verticalSpace(maxVSp int) (vSp int) {
 	}
 	return vSp
 }
+
+
+func (n *wu) formatValue() (s string) {
+    // placeholder for now
+    return wu.token.Value()
+}

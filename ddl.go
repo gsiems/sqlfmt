@@ -119,8 +119,7 @@ func (o *ddl) format(q *queue) (err error) {
 				q.items[i].indents = indents
 			}
 
-			q.items[i].value = items[0].token.Value()
-			//q.items[i].value = formatValue()
+			q.items[i].value = items[0].formatValue()
 		}
 
 		/* If the code is creating a PostgreSQL PL/PgSQL, or

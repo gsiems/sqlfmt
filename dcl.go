@@ -136,8 +136,7 @@ func (o *dcl) format(q *queue) (err error) {
 				q.items[i].indents = indents
 			}
 
-			q.items[i].value = items[0].token.Value()
-			//q.items[i].value = formatValue()
+			q.items[i].value = items[0].formatValue()
 		}
 
 		if !items[0].isComment() {
