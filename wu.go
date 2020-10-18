@@ -151,5 +151,5 @@ func (n *wu) verticalSpace(maxVSp int) (vSp int) {
 
 func (n *wu) formatValue() (s string) {
     // placeholder for now
-    return wu.token.Value()
+    return n.token.Value()
 }
