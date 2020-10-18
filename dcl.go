@@ -2,7 +2,13 @@ package main
 
 /* Tag and format DCL (GRANT/REVOKE) statements
 
- */
+GRANT { { object_privilege[, ...] | [role[, ...] } }
+    [ON database_object_name]
+    [TO grantee[, ...]]
+    [WITH HIERARCHY OPTION] [WITH GRANT OPTION] [WITH ADMIN OPTION]
+    [FROM {CURRENT_USER | CURRENT_ROLE}]
+
+*/
 
 import (
 	"strings"
@@ -20,24 +26,14 @@ starting token for a DCL statement.
 */
 func (p *dcl) isStart(items [2]wu) bool {
 
-	switch dialect {
-	case sqlparse.PostgreSQL:
-		switch strings.ToUpper(items[0].token.Value()) {
-		case "GRANT", "REVOKE", "REASSIGN":
-			return true
-		}
-	case sqlparse.Oracle:
-		switch strings.ToUpper(items[0].token.Value()) {
-		case "GRANT":
-			return strings.ToUpper(items[1].token.Value()) != "WITH"
-		case "REVOKE":
-			return true
-		}
-	default:
-		switch strings.ToUpper(items[0].token.Value()) {
-		case "GRANT", "REVOKE":
-			return true
-		}
+	switch strings.ToUpper(items[0].token.Value()) {
+	case "GRANT":
+		// Ensure this isn't part of "WITH GRANT OPTION"
+		return strings.ToUpper(items[1].token.Value()) != "WITH"
+	case "REVOKE":
+		return true
+	case "REASSIGN":
+		return dialect == sqlparse.PostgreSQL
 	}
 
 	return false
@@ -48,11 +44,7 @@ ending token for a DCL statement.
 
 */
 func (p *dcl) isEnd(items [2]wu) bool {
-	switch items[0].token.Value() {
-	case ";":
-		return true
-	}
-	return false
+	return items[0].token.Value() == ";"
 }
 
 /* tag iterates through the queue and tags the tokens that are believed
