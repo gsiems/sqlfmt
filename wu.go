@@ -8,25 +8,12 @@ import (
 	"github.com/gsiems/sql-parse/sqlparse"
 )
 
-type WuType int
-
-const (
-	// work unit types
-	Unknown   WuType = iota // A workunit that hasn't been tagged (unknown type)
-	DCL               // A work unit that belongs to a DCL (GRANT/REVOKE) statement
-	DDL                     // A work unit that belongs to a DDL statement
-	DML                     // A work unit that belongs to a DML statement
-	PL                      // A work unit that belongs to a section of Procedural Language
-	Formatted               // A work unit that contains a formatted statement
-	Final                   // A work unit that indicates the end of work units
-)
-
 /* A Work Unit [wu] is a container unit that contains either an
 un-formatted sqlparse token or the results of formatting actions
 
 */
 type wu struct {
-	Type    WuType
+	Type    int
 	vertSp  int    // number of newlines (vertical space) before the work unit
 	indents int    // the number of indentation units before the work unit
 	leadSp  int    // the number of leading spaces before the value
@@ -34,30 +21,12 @@ type wu struct {
 	token   sqlparse.Token
 }
 
-func (e WuType) String() string {
-
-	var names = map[WuType]string{
-		Unknown:   "Unknown",
-		DCL: "DCL",
-		DDL:       "DDL",
-		DML:       "DML",
-		PL:        "PL",
-		Formatted: "Formatted",
-		Final:     "Final",
-	}
-	r, ok := names[e]
-	if !ok {
-		return fmt.Sprintf("%d", int(e))
-	}
-	return r
-}
-
 /* queue is an ordered list of contiguous work units that have all been
 tagged as being of the same type (DML, DDL, etc.)
 
 */
 type queue struct {
-	Type  WuType
+	Type  int
 	items []wu
 }
 
@@ -148,8 +117,7 @@ func (n *wu) verticalSpace(maxVSp int) (vSp int) {
 	return vSp
 }
 
-
 func (n *wu) formatValue() (s string) {
-    // placeholder for now
-    return n.token.Value()
+	// placeholder for now
+	return n.token.Value()
 }

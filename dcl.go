@@ -94,12 +94,12 @@ func (o *dcl) format(q *queue) (err error) {
 			indents := 1
 
 			// check for new line requirements
-			nlChk := noNewLine
+			nlChk := NoNewLine
 			switch {
 			case i == 0:
 				// nada
 			case o.isStart(items):
-				nlChk = newLineRequired
+				nlChk = NewLineRequired
 				indents = 0
 			default:
 				// check for comment
@@ -109,9 +109,9 @@ func (o *dcl) format(q *queue) (err error) {
 			// vertical spaces
 			vertSp := items[0].verticalSpace(2)
 			switch nlChk {
-			case newLineRequired:
+			case NewLineRequired:
 				vertSp = maxInt(vertSp, 1)
-			case newLineAllowed:
+			case NewLineAllowed:
 				vertSp = vertSp
 			default:
 				vertSp = 0

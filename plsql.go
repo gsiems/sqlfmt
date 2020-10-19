@@ -1,6 +1,6 @@
 package main
 
-/* Tag and format Oracle PL/SQL functions and procedures
+/* Tag and format Oracle PL/SQL paackages, functions, and procedures
 
 [CREATE [ OR REPLACE] <PL/SQL type> [( ... )] [...] [IS|AS] <PL/SQL code> /
 
@@ -94,5 +94,34 @@ func (o *plsql) tag(q *queue) (err error) {
 		}
 
 	}
+	return err
+}
+
+/* format iterates through the queue and determines the formatting for the
+work units that are tagged as PL/SQL functions/procedures.
+
+*/
+func (o *plsql) format(q *queue) (err error) {
+
+	// Stub
+
+	/*
+		var lParens int
+		var items [2]wu
+
+		for i := 0; i < len(q.items); i++ {
+			items[0] = q.items[i]
+
+			if q.items[i].Type == PL {
+				lParens = items[0].newPDepth(lParens)
+				indents := 1
+
+			}
+
+			if !items[0].isComment() {
+				items[1] = items[0]
+			}
+		}
+	*/
 	return err
 }

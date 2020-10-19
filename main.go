@@ -182,12 +182,28 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 		return formatted, err
 	}
 
+	err = fDML.format(&q)
+	if err != nil {
+		return formatted, err
+	}
+
 	// temp for validating tagging to this point
 	var s []string
 	for _, v := range q.items {
 
+		cn, ok := ConstNames[v.Type]
+		if !ok {
+			cn = "UNDEF"
+		}
+
+		s = append(s, fmt.Sprintf("\n%s [%d, %d, %d]: %q", cn, v.vertSp, v.indents, v.leadSp, v.token.Value()))
+	}
+	s = append(s, "\n")
+
+	for _, v := range q.items {
+
 		switch v.Type {
-		case DCL, DDL:
+		case DCL, DDL, DML:
 
 			nl := strings.Repeat("\n", v.vertSp)
 			ind := strings.Repeat(ident, v.indents)
@@ -196,8 +212,8 @@ func runFormatter(input string, dialect int) (formatted string, err error) {
 
 		case Final:
 			s = append(s, "\n")
-		default:
-			s = append(s, fmt.Sprintf("\n%v [%d, %d, %d]: %q", v.Type, v.vertSp, v.indents, v.leadSp, v.token.Value()))
+			//default:
+			//	s = append(s, fmt.Sprintf("\n%v [%d, %d, %d]: %q", v.Type, v.vertSp, v.indents, v.leadSp, v.token.Value()))
 		}
 	}
 
