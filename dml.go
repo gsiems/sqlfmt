@@ -251,7 +251,7 @@ func (o *dml) nlCheck(q *queue, i, pDepth int) (nlChk int) {
 				return NewLineRequired
 			}
 		}
-	case "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL", "ON", "USING":
+	case "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL", "LATERAL", "ON", "USING":
 		if pDepth == blk.pDepth {
 			return NewLineRequired
 		}
@@ -307,7 +307,7 @@ func (o *dml) indents(q *queue, i, nlChk int) (indents int) {
 		indents -= 2
 	case "WHEN", "ELSE", "END":
 		indents--
-	case "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL":
+	case "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL", "LATERAL":
 		indents--
 	case "INTO", "FROM", "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET":
 		indents--
