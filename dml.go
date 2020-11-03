@@ -65,13 +65,14 @@ func (o *dml) setType(s string) {
 starting token for a DML statement.
 
 */
-func (o *dml) isStart(items [2]wu) bool {
+func (o *dml) isStart(q *queue, i int) bool {
 
-	switch strings.ToUpper(items[0].token.Value()) {
+	switch strings.ToUpper(q.items[i].token.Value()) {
 	case "WITH", "MERGE", "SELECT", "TRUNCATE":
 		return true
 	case "UPDATE", "INSERT", "UPSERT", "DELETE":
-		switch strings.ToUpper(items[1].token.Value()) {
+		pnc, _ := q.prevNcWu(i)
+		switch strings.ToUpper(pnc.token.Value()) {
 		// trigger: (BEFORE|AFTER|INSTEAD OF) (UPDATE|INSERT|DELETE|UPSERT?) ON
 		case "BEFORE", "AFTER", "OF":
 			return false
@@ -85,8 +86,8 @@ func (o *dml) isStart(items [2]wu) bool {
 valid ending token for a DML statement.
 
 */
-func (o *dml) isEnd(items [2]wu) bool {
-	switch items[0].token.Value() {
+func (o *dml) isEnd(q *queue, i int) bool {
+	switch q.items[i].token.Value() {
 	case ";":
 		return true
 	}
@@ -111,23 +112,21 @@ there is no trailing semi-colon at the end of the embedded DML statement
 func (o *dml) tag(q *queue) (err error) {
 
 	var lParens int
-	var items [2]wu
 	currType := Unknown
 	var lineNo int
 
 	for i := 0; i < len(q.items); i++ {
-		items[0] = q.items[i]
 
-		lineNo += strings.Count(items[0].token.WhiteSpace(), "\n")
+		lineNo += strings.Count(q.items[i].token.WhiteSpace(), "\n")
 
 		if q.items[i].Type == Unknown {
 			switch {
 			case currType == DML:
-				lParens = items[0].newPDepth(lParens)
+				lParens = q.items[i].newPDepth(lParens)
 				switch {
 				case lParens < 0:
 					currType = Unknown
-				case strings.ToUpper(items[0].token.Value()) == "LOOP":
+				case strings.ToUpper(q.items[i].token.Value()) == "LOOP":
 					currType = Unknown
 					if lParens > 0 {
 						err := errors.New(fmt.Sprintf("Extra open parens detected on line %d while tagging DML", lineNo))
@@ -135,7 +134,7 @@ func (o *dml) tag(q *queue) (err error) {
 					}
 				default:
 					q.items[i].Type = currType
-					if o.isEnd(items) {
+					if o.isEnd(q, i) {
 						currType = Unknown
 						if lParens > 0 {
 							err := errors.New(fmt.Sprintf("Extra open parens detected on line %d while tagging DML", lineNo))
@@ -143,22 +142,17 @@ func (o *dml) tag(q *queue) (err error) {
 						}
 					}
 				}
-			case o.isStart(items):
+			case o.isStart(q, i):
 				currType = DML
 				q.items[i].Type = DML
 				lParens = 0
 			}
 		}
-
-		if !items[0].isComment() {
-			items[1] = items[0]
-		}
-
 	}
 	return err
 }
 
-func (o *dml) preStack(items [2]wu, pDepth int) (blk dmlBlock) {
+func (o *dml) preStack(q *queue, i, pDepth int) (blk dmlBlock) {
 
 	// open parens -> push stack
 	// close parens -> pop stack
@@ -171,7 +165,7 @@ func (o *dml) preStack(items [2]wu, pDepth int) (blk dmlBlock) {
 		o.push(dmlBlock{Type: Unknown, pDepth: pDepth})
 	}
 
-	curr := strings.ToUpper(items[0].token.Value())
+	curr := strings.ToUpper(q.items[i].token.Value())
 
 	switch curr {
 	case "(":
@@ -191,10 +185,10 @@ func (o *dml) preStack(items [2]wu, pDepth int) (blk dmlBlock) {
 	return o.top()
 }
 
-func (o *dml) postStack(items [2]wu, pDepth int) {
+func (o *dml) postStack(q *queue, i, pDepth int) {
 
 	blk := o.top()
-	curr := strings.ToUpper(items[0].token.Value())
+	curr := strings.ToUpper(q.items[i].token.Value())
 
 	switch curr {
 	case "END":
@@ -210,20 +204,22 @@ func (o *dml) postStack(items [2]wu, pDepth int) {
 
 }
 
-func (o *dml) nlCheck(items [2]wu, prev wu, pDepth int) (nlChk int) {
+func (o *dml) nlCheck(q *queue, i, pDepth int) (nlChk int) {
 
 	blk := o.top()
 	nlChk = NoNewLine
+	pnc, _ := q.prevNcWu(i)
+
 	switch {
-	case o.isStart(items):
+	case o.isStart(q, i):
 		return NewLineRequired
-	case items[1].token.Value() == ",":
+	case pnc.token.Value() == ",":
 		if pDepth == blk.pDepth && blk.Type != Unknown {
 			return NewLineRequired
 		}
 	}
 
-	curr := strings.ToUpper(items[0].token.Value())
+	curr := strings.ToUpper(q.items[i].token.Value())
 
 	switch blk.Type {
 	case Unknown:
@@ -247,7 +243,7 @@ func (o *dml) nlCheck(items [2]wu, prev wu, pDepth int) (nlChk int) {
 			return NewLineRequired
 		}
 	case "INTO":
-		switch strings.ToUpper(items[1].token.Value()) {
+		switch strings.ToUpper(pnc.token.Value()) {
 		case "INSERT":
 			// nada
 		default:
@@ -260,7 +256,7 @@ func (o *dml) nlCheck(items [2]wu, prev wu, pDepth int) (nlChk int) {
 			return NewLineRequired
 		}
 	case "JOIN":
-		switch strings.ToUpper(prev.token.Value()) {
+		switch strings.ToUpper(pnc.token.Value()) {
 		case "OUTER":
 			// nada
 		default:
@@ -272,12 +268,12 @@ func (o *dml) nlCheck(items [2]wu, prev wu, pDepth int) (nlChk int) {
 		return NewLineRequired
 	}
 
-	return chkCommentNL(items[0], prev, nlChk)
+	return chkCommentNL(q, i, nlChk)
 }
 
-func (o *dml) vertSp(items [2]wu, prev wu, nlChk int) int {
+func (o *dml) vertSp(q *queue, i, nlChk int) int {
 
-	vertSp := items[0].verticalSpace(2)
+	vertSp := q.items[i].verticalSpace(2)
 	switch nlChk {
 	case NewLineRequired:
 		return maxInt(vertSp, 1)
@@ -290,34 +286,34 @@ func (o *dml) vertSp(items [2]wu, prev wu, nlChk int) int {
 	return 0
 }
 
-func (o *dml) indents(items [2]wu, prev wu, nlChk int) (i int) {
+func (o *dml) indents(q *queue, i, nlChk int) (indents int) {
 
 	// if is comment then want to use previous indent?
 
 	for _, v := range o.stack {
-		i++
+		indents++
 		if v.Type != Unknown {
-			i++
+			indents++
 		}
 	}
 
-	curr := strings.ToUpper(items[0].token.Value())
+	curr := strings.ToUpper(q.items[i].token.Value())
 	switch curr {
 	case "WITH", "SELECT", "INSERT", "UPDATE", "DELETE", "MERGE", "UPSERT", "TRUNCATE":
-		i -= 2
+		indents -= 2
 	case "UNION", "INTERSECT", "EXCEPT", "MINUS":
-		i -= 2
+		indents -= 2
 	case "CASE":
-		i -= 2
+		indents -= 2
 	case "WHEN", "ELSE", "END":
-		i--
+		indents--
 	case "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL":
-		i--
+		indents--
 	case "INTO", "FROM", "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET":
-		i--
+		indents--
 	}
 
-	return maxInt(i, 0)
+	return maxInt(indents, 0)
 }
 
 /* format iterates through the queue and determines the formatting for the
@@ -332,36 +328,34 @@ func (o *dml) format(q *queue) (err error) {
 
 	var lParens int
 	var baseIndents int
-	var items [2]wu
-	var prev wu
 
 	for i := 0; i < len(q.items); i++ {
-		items[0] = q.items[i]
 
 		if q.items[i].Type != DML {
 			baseIndents = q.items[i].indents
 		}
 
 		if q.items[i].Type == DML {
-			lParens = items[0].newPDepth(lParens)
+			lParens = q.items[i].newPDepth(lParens)
 			//indents := 1
 
-			_ = o.preStack(items, lParens)
+			_ = o.preStack(q, i, lParens)
 
 			nlChk := NoNewLine
 			if i > 0 {
-				nlChk = o.nlCheck(items, prev, lParens)
+				nlChk = o.nlCheck(q, i, lParens)
 			}
 
-			vertSp := o.vertSp(items, prev, nlChk)
+			vertSp := o.vertSp(q, i, nlChk)
 
 			if vertSp == 0 {
+				pnc, _ := q.prevNcWu(i)
 				switch {
-				case items[0].token.Value() == ",":
+				case q.items[i].token.Value() == ",":
 					// nada
-				case strings.HasPrefix(items[0].token.Value(), "."):
+				case strings.HasPrefix(q.items[i].token.Value(), "."):
 					// nada
-				case strings.HasSuffix(items[1].token.Value(), "."):
+				case strings.HasSuffix(pnc.token.Value(), "."):
 					// nada
 				case i == 0:
 					// nada
@@ -371,20 +365,14 @@ func (o *dml) format(q *queue) (err error) {
 
 			} else {
 				// calc indents based on stack
-				indents := o.indents(items, prev, nlChk)
+				indents := o.indents(q, i, nlChk)
 				q.items[i].vertSp = vertSp
 				q.items[i].indents = indents + baseIndents
 			}
 
-			q.items[i].value = items[0].formatValue()
+			q.items[i].value = q.items[i].formatValue()
 
-			o.postStack(items, lParens)
-
-		}
-
-		prev = items[0]
-		if !items[0].isComment() {
-			items[1] = items[0]
+			o.postStack(q, i, lParens)
 		}
 	}
 

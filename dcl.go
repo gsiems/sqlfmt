@@ -24,12 +24,13 @@ type dcl struct {
 starting token for a DCL statement.
 
 */
-func (p *dcl) isStart(items [2]wu) bool {
+func (p *dcl) isStart(q *queue, i int) bool {
 
-	switch strings.ToUpper(items[0].token.Value()) {
+	switch strings.ToUpper(q.items[i].token.Value()) {
 	case "GRANT":
 		// Ensure this isn't part of "WITH GRANT OPTION"
-		return strings.ToUpper(items[1].token.Value()) != "WITH"
+		pnc, _ := q.prevNcWu(i)
+		return strings.ToUpper(pnc.token.Value()) != "WITH"
 	case "REVOKE":
 		return true
 	case "REASSIGN":
@@ -43,8 +44,8 @@ func (p *dcl) isStart(items [2]wu) bool {
 ending token for a DCL statement.
 
 */
-func (p *dcl) isEnd(items [2]wu) bool {
-	return items[0].token.Value() == ";"
+func (p *dcl) isEnd(q *queue, i int) bool {
+	return q.items[i].token.Value() == ";"
 }
 
 /* tag iterates through the queue and tags the tokens that are believed
@@ -53,28 +54,22 @@ to belong to DCL statements.
 */
 func (o *dcl) tag(q *queue) (err error) {
 
-	var items [2]wu
 	currType := Unknown
 
 	for i := 0; i < len(q.items); i++ {
-		items[0] = q.items[i]
+
 		if q.items[i].Type == Unknown {
 			switch {
 			case currType == DCL:
 				q.items[i].Type = DCL
-				if o.isEnd(items) {
+				if o.isEnd(q, i) {
 					currType = Unknown
 				}
-			case o.isStart(items):
+			case o.isStart(q, i):
 				currType = DCL
 				q.items[i].Type = DCL
 			}
 		}
-
-		if !items[0].isComment() {
-			items[1] = items[0]
-		}
-
 	}
 	return err
 }
@@ -85,10 +80,9 @@ work units that are tagged as DCL statements.
 */
 func (o *dcl) format(q *queue) (err error) {
 
-	var items [2]wu
+	var pnc wu
 
 	for i := 0; i < len(q.items); i++ {
-		items[0] = q.items[i]
 
 		if q.items[i].Type == DCL {
 			indents := 1
@@ -98,16 +92,16 @@ func (o *dcl) format(q *queue) (err error) {
 			switch {
 			case i == 0:
 				// nada
-			case o.isStart(items):
+			case o.isStart(q, i):
 				nlChk = NewLineRequired
 				indents = 0
 			default:
 				// check for comment
-				nlChk = chkCommentNL(q.items[i], q.items[i-1], nlChk)
+				nlChk = chkCommentNL(q, i, nlChk)
 			}
 
 			// vertical spaces
-			vertSp := items[0].verticalSpace(2)
+			vertSp := q.items[i].verticalSpace(2)
 			switch nlChk {
 			case NewLineRequired:
 				vertSp = maxInt(vertSp, 1)
@@ -119,11 +113,11 @@ func (o *dcl) format(q *queue) (err error) {
 
 			if vertSp == 0 {
 				switch {
-				case items[0].token.Value() == ",":
+				case q.items[i].token.Value() == ",":
 					// nada
-				case strings.HasPrefix(items[0].token.Value(), "."):
+				case strings.HasPrefix(q.items[i].token.Value(), "."):
 					// nada
-				case strings.HasSuffix(items[1].token.Value(), "."):
+				case strings.HasSuffix(pnc.token.Value(), "."):
 					// nada
 				case i == 0:
 					// nada
@@ -136,11 +130,11 @@ func (o *dcl) format(q *queue) (err error) {
 				q.items[i].indents = indents
 			}
 
-			q.items[i].value = items[0].formatValue()
+			q.items[i].value = q.items[i].formatValue()
 		}
 
-		if !items[0].isComment() {
-			items[1] = items[0]
+		if !q.items[i].isComment() {
+			pnc = q.items[i]
 		}
 	}
 	return err

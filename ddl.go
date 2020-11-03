@@ -18,9 +18,9 @@ type ddl struct {
 starting token for a DDL statement.
 
 */
-func (p *ddl) isStart(items [2]wu) bool {
+func (p *ddl) isStart(q *queue, i int) bool {
 
-	switch strings.ToUpper(items[0].token.Value()) {
+	switch strings.ToUpper(q.items[i].token.Value()) {
 	case "CREATE", "ALTER", "DROP", "COMMENT":
 		return true
 	case "SET", "SHOW": // not really DDL
@@ -52,14 +52,13 @@ work units that are tagged as DDL statements.
 func (o *ddl) format(q *queue) (err error) {
 
 	var lParens int
+	var pnc wu
 	inDDL := false
-	var items [2]wu
 
 	for i := 0; i < len(q.items); i++ {
-		items[0] = q.items[i]
 
 		if q.items[i].Type == DDL {
-			lParens = items[0].newPDepth(lParens)
+			lParens = q.items[i].newPDepth(lParens)
 			indents := 1
 
 			// check for new line requirements
@@ -67,11 +66,11 @@ func (o *ddl) format(q *queue) (err error) {
 			switch {
 			case i == 0:
 				// nada
-			case o.isStart(items):
+			case o.isStart(q, i):
 				nlChk = NewLineRequired
 				inDDL = true
 				indents = 0
-			case items[1].token.Value() == ",":
+			case pnc.token.Value() == ",":
 				if lParens == 0 {
 					nlChk = NewLineRequired
 				}
@@ -82,15 +81,15 @@ func (o *ddl) format(q *queue) (err error) {
 				   that are stand-alone and comments that are embedded
 				   within a DDL statement as the first should have no
 				   indent and the latter should have an indent */
-				if items[0].isComment() && !inDDL {
+				if q.items[i].isComment() && !inDDL {
 					indents = 0
 				}
 
-				nlChk = chkCommentNL(q.items[i], q.items[i-1], nlChk)
+				nlChk = chkCommentNL(q, i, nlChk)
 			}
 
 			// vertical spaces
-			vertSp := items[0].verticalSpace(2)
+			vertSp := q.items[i].verticalSpace(2)
 			switch nlChk {
 			case NewLineRequired:
 				vertSp = maxInt(vertSp, 1)
@@ -102,11 +101,11 @@ func (o *ddl) format(q *queue) (err error) {
 
 			if vertSp == 0 {
 				switch {
-				case items[0].token.Value() == ",":
+				case q.items[i].token.Value() == ",":
 					// nada
-				case strings.HasPrefix(items[0].token.Value(), "."):
+				case strings.HasPrefix(q.items[i].token.Value(), "."):
 					// nada
-				case strings.HasSuffix(items[1].token.Value(), "."):
+				case strings.HasSuffix(pnc.token.Value(), "."):
 					// nada
 				case i == 0:
 					// nada
@@ -119,7 +118,7 @@ func (o *ddl) format(q *queue) (err error) {
 				q.items[i].indents = indents
 			}
 
-			q.items[i].value = items[0].formatValue()
+			q.items[i].value = q.items[i].formatValue()
 		}
 
 		/* If the code is creating a PostgreSQL PL/PgSQL, or
@@ -132,17 +131,17 @@ func (o *ddl) format(q *queue) (err error) {
 
 		*/
 		switch {
-		case items[0].token.Value() == ";":
+		case q.items[i].token.Value() == ";":
 			inDDL = false
-		case items[1].Type == PL:
-			switch items[1].token.Value() {
+		case pnc.Type == PL:
+			switch pnc.token.Value() {
 			case "/", ";":
 				inDDL = false
 			}
 		}
 
-		if !items[0].isComment() {
-			items[1] = items[0]
+		if !q.items[i].isComment() {
+			pnc = q.items[i]
 		}
 	}
 	return err

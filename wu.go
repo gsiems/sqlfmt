@@ -80,6 +80,30 @@ func initialzeQueue(tokens sqlparse.Tokens) (q queue, err error) {
 	return q, err
 }
 
+/* prevWu returns the work unit prior to the specified one
+
+*/
+func (q *queue) prevWu(i int) (n wu) {
+	if i > 0 {
+		n = q.items[i-1]
+	}
+	return n
+}
+
+/* prevNcWu returns the first non-comment work unit prior to the
+specified one (and the index where it was found)
+
+ */
+func (q *queue) prevNcWu(i int) (n wu, ni int) {
+
+	for ni = i - 1; ni >= 0; ni-- {
+		if !q.items[ni].isComment() {
+			return q.items[ni], ni
+		}
+	}
+	return n, ni
+}
+
 func (n *wu) isComment() bool {
 	switch n.token.Type() {
 	case sqlparse.LineCommentToken, sqlparse.PoundLineCommentToken, sqlparse.BlockCommentToken:
