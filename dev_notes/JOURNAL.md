@@ -40,3 +40,13 @@ git add parser dev_notes/
 
 git commit -m "Lift and shift the parser module code from github.com/gsiems/sql-parse, refactoring as needed."
 ```
+
+```
+git add env/env.go
+
+git commit -m 'Fix \'duplicate case "identcase"\' error'
+
+git add formatter/formatter.go formatter/formatter_test.go formatter/run_tests.sh dev_notes/
+
+git commit -m "Setup initial testing of the parser."
+```
