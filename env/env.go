@@ -59,8 +59,6 @@ func (e *Env) SetString(k, v string) {
 		e.SetIdentCase(v)
 	case "datatypecase", "dtc":
 		e.SetDatatypeCase(v)
-	case "identcase", "idc":
-		e.SetIdentCase(v)
 	case "input", "if":
 		e.SetInputFile(v)
 	case "output", "of":
