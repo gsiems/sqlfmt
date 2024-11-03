@@ -21,3 +21,10 @@ git add go.mod go.sum dev_notes/
 
 git commit -m "Reboot project"
 ```
+
+```
+git add dialect dev_notes/JOURNAL.md
+
+git commit -m "Lift and shift the dialect module code from github.com/gsiems/sql-parse.
+Fix a few bugs and refactor to implement using an interface."
+```
