@@ -28,3 +28,9 @@ git add dialect dev_notes/JOURNAL.md
 git commit -m "Lift and shift the dialect module code from github.com/gsiems/sql-parse.
 Fix a few bugs and refactor to implement using an interface."
 ```
+
+```
+git add env dev_notes/JOURNAL.md
+
+git commit -m "Add environment module for tracking values of configuration parameters"
+```
