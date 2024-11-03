@@ -1,7 +1,7 @@
 
-```psql -t -c "with base as ( select '2024-11-03'::date as reboot_date ) select current_date - reboot_date from base ;"```
+```psql -t -c "with base as ( select '2024-11-03'::date as reboot_date ) select 'Day ' || (current_date - reboot_date)::text from base ;"```
 
-## 0
+## Day 0
 
 ```
 mkdir old_code
@@ -33,4 +33,10 @@ Fix a few bugs and refactor to implement using an interface."
 git add env dev_notes/JOURNAL.md
 
 git commit -m "Add environment module for tracking values of configuration parameters"
+```
+
+```
+git add parser dev_notes/
+
+git commit -m "Lift and shift the parser module code from github.com/gsiems/sql-parse, refactoring as needed."
 ```
