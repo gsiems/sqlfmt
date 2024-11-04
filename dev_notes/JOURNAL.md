@@ -44,9 +44,20 @@ git commit -m "Lift and shift the parser module code from github.com/gsiems/sql-
 ```
 git add env/env.go
 
-git commit -m 'Fix \'duplicate case "identcase"\' error'
+git commit -m "Fix 'duplicate case \"identcase\"' error"
 
 git add formatter/formatter.go formatter/formatter_test.go formatter/run_tests.sh dev_notes/
 
 git commit -m "Setup initial testing of the parser."
+```
+
+The next step is to group the tokens that go together as part of a larger
+object, unit, or command into "bags" such that each bag can be formatted
+separately. Sub-units such as sub-selects, CTEs, etc. should also be bagged
+separately as that should make the formatting code less complex.
+
+```
+git add formatter/*.go dev_notes/
+
+git commit -m "Added tagging for DCL commands and comments."
 ```
