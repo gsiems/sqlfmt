@@ -8,13 +8,14 @@ import (
 )
 
 type FmtToken struct {
-	id         int    // the ID of the token
-	categoryOf int    // the category of token
-	typeOf     int    // the type of token
-	vSpace     int    // the count of line-feeds (vertical space) preceding the token
-	indents    int    // the count of indentations preceding the token
-	hSpace     string // the non-indentation horizontal white-space preceding the token
-	value      string // the non-white-space text of the token
+	id            int    // the ID of the token
+	categoryOf    int    // the category of token
+	typeOf        int    // the type of token
+	vSpace        int    // the count of line-feeds (vertical space) preceding the token
+	commentVSpace int    // the count of line-feeds (vertical space) preceding the token due to comments
+	indents       int    // the count of indentations preceding the token
+	hSpace        string // the non-indentation horizontal white-space preceding the token
+	value         string // the non-white-space text of the token
 }
 
 // AsUpper returns the token value as upper-case, mostly for comparison purposes
@@ -85,5 +86,5 @@ func (t *FmtToken) String() string {
 	tName := nameOf(t.typeOf)
 
 	return fmt.Sprintf("%6d %-12s: %-12s (%2d, %2d, %2d) [%s]",
-		t.id, cName, tName, t.vSpace, t.indents, len(t.hSpace), t.value)
+		t.id, cName, tName, t.vSpace+t.commentVSpace, t.indents, len(t.hSpace), t.value)
 }
