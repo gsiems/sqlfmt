@@ -39,7 +39,7 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 	var remainder []FmtToken
 	var bagTokens []FmtToken
 
-	isInBlock := false
+	isInBag := false
 	bagId := 0
 	bagType := 0
 	forObj := ""
@@ -55,7 +55,7 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 		canOpenBag := false
 		openBag := false
 
-		switch isInBlock {
+		switch isInBag {
 		case true:
 			if ctVal == ";" {
 				closeBag = true
@@ -98,11 +98,11 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 		}
 
 		switch {
-		case isInBlock && closeBag:
+		case isInBag && closeBag:
 			bagTokens = append(bagTokens, cTok)
 
 			// Close the bag
-			isInBlock = false
+			isInBag = false
 
 			key := bagKey(bagType, bagId)
 			bagMap[key] = TokenBag{
@@ -117,13 +117,13 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 			bagId = 0
 			bagTokens = nil
 
-		case isInBlock:
+		case isInBag:
 			bagTokens = append(bagTokens, cTok)
 
 		case openBag:
 
 			// Open a new bag
-			isInBlock = true
+			isInBag = true
 
 			bagCat := 0
 

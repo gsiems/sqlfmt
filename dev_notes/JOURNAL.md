@@ -61,3 +61,47 @@ git add formatter/*.go dev_notes/
 
 git commit -m "Added tagging for DCL commands and comments."
 ```
+
+## Day 1
+
+### Thoughts on formatting.
+
+* Needs to be multi-pass with the first pass updating the high-level
+vertical-space and indentations.
+
+  * For DML this would result in the main clause keywords like "SELECT",
+  "FROM", "WHERE" having the v-space and indentations set as well as the
+  beginning of each column expression having the v-space and indentations set.
+
+  * Would probably need to differentiate the high-level v-space from the
+  comment related v-space (either the v-space prior to a comment or the v-space
+  of the token following the comment (if not a main clause keyword)).
+
+* The second pass would update the indentation of those tokens that are bag
+pointers. Actually, this pass would need to update the indentations of the
+tokens contained in the the bag being pointed to. Probably needs to be
+iterative until the appropriate level of indentations have been propagated to
+all sub-bags.
+
+* The third pass should take care of wrapping lines (due to comments, overly
+long lines, case structures, etc.)
+
+### Regarding testing.
+
+* Since the current directory structure for test files includes the database
+dialect, the dialect does not need to be specified in the directive comment at
+the top of the file.
+
+* There should be a set of tests for parsing the directive comment to ensure
+that the resulting environment matches the directives.
+
+* For the sql test files-- multiple tests can be run from the same input file
+for spaces vs. tabs, upper-case vs. lower case keywords, etc.
+
+Back to tagging...
+
+```
+git add formatter/*.go dev_notes/
+
+git commit -m "Added tagging for DML statements."
+```

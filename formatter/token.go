@@ -35,6 +35,10 @@ func (t *FmtToken) IsCodeComment() bool {
 	return t.categoryOf == parser.Comment
 }
 
+func (t *FmtToken) IsKeyword() bool {
+	return t.categoryOf == parser.Keyword
+}
+
 func nameOf(i int) string {
 
 	var names = map[int]string{
