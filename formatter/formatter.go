@@ -16,6 +16,7 @@ const (
 	DDLBag                  // A bag of DDL tokens
 	DMLBag                  // A bag of DML tokens
 	PLxBag                  // a bag of function/procedure/package tokens
+	PLxBody                 // A bag of function/procedure/package body tokens
 	CommentBag              // A bag of "COMMENT ON ..." tokens
 )
 

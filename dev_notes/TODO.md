@@ -13,7 +13,6 @@ the datatype
 
 Still need to tag:
 
-* PostgreSQL function and procedure code
 * Oracle package, function, and procedure code
 * DDL code
 

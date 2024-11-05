@@ -25,7 +25,7 @@ func (t *FmtToken) AsUpper() string {
 
 func (t *FmtToken) IsBag() bool {
 	switch t.typeOf {
-	case DNFBag, DCLBag, DDLBag, DMLBag, PLxBag, CommentBag:
+	case DNFBag, DCLBag, DDLBag, DMLBag, PLxBag, PLxBody, CommentBag:
 		return true
 	}
 	return false
@@ -74,6 +74,7 @@ func nameOf(i int) string {
 		DDLBag:     "DDLBag",
 		DMLBag:     "DMLBag",
 		PLxBag:     "PLxBag",
+		PLxBody:    "PLxBody",
 		CommentBag: "CommentBag",
 	}
 

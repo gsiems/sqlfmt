@@ -105,3 +105,13 @@ git add formatter/*.go dev_notes/
 
 git commit -m "Added tagging for DML statements."
 ```
+
+## Day 2
+
+Woohoo!
+
+```
+git add formatter/*.go dev_notes/
+
+git commit -m "Added tagging for PostgreSQL functions and procedures."
+```
