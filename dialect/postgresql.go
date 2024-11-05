@@ -35,7 +35,10 @@ func (d PostgreSQLDialect) StringQuoteChar() string {
 // MaxOperatorLength returns the length of the longest operator
 // supported by the dialect
 func (d PostgreSQLDialect) MaxOperatorLength() int {
-	return 3
+
+	// Per https://www.postgresql.org/docs/current/sql-createoperator.html
+	// NAMEDATALEN-1 (63 by default)
+	return 63
 }
 
 // IsDatatype returns a boolean indicating if the supplied string
@@ -1059,8 +1062,72 @@ func (d PostgreSQLDialect) IsOperator(s string) bool {
 		"..":  true, // Added for loop ranges
 	}
 
-	_, ok := pgOperators[s]
-	return ok
+	// For valid operators that come with the system
+	if _, ok := pgOperators[s]; ok {
+		return true
+	}
+
+	/*
+		For custom operators, per https://www.postgresql.org/docs/current/sql-createoperator.html:
+
+		The operator name is a sequence of up to NAMEDATALEN-1 (63 by default)
+		characters from the following list:
+
+		+ - * / < > = ~ ! @ # % ^ & | ` ?
+
+		There are a few restrictions on your choice of name:
+
+		-- and /* cannot appear anywhere in an operator name, since they will
+		be taken as the start of a comment.
+
+		A multicharacter operator name cannot end in + or -, unless the name
+		also contains at least one of these characters:
+
+		~ ! @ # % ^ & | ` ?
+
+		For example, @- is an allowed operator name, but *- is not. This
+		restriction allows PostgreSQL to parse SQL-compliant commands without
+		requiring spaces between tokens.
+
+		The symbol => is reserved by the SQL grammar, so it cannot be used as
+		an operator name.
+	*/
+	var pB string
+	bs := []byte(s)
+	idxMax := len(bs) - 1
+	hasValidMultichar := false
+
+	for idx := 0; idx <= idxMax; idx++ {
+		b := string(bs[idx])
+		switch b {
+		case "+":
+			if idx == idxMax && !hasValidMultichar {
+				return false
+			}
+		case "-":
+			if pB == "-" {
+				// "--" is a comment start
+				return false
+			}
+			if idx == idxMax && !hasValidMultichar {
+				return false
+			}
+		case "*":
+			if pB == "/" {
+				// "/*" is a comment start
+				return false
+			}
+		case "~", "!", "@", "#", "%", "^", "&", "|", "`", "?":
+			hasValidMultichar = true
+		case "/", "<", ">", "=":
+		// nada
+		default:
+			return false
+		}
+
+		pB = b
+	}
+	return true
 }
 
 // IsLabel returns a boolean indicating if the supplied string
