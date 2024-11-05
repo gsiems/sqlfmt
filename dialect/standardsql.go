@@ -51,6 +51,7 @@ func (d StandardSQLDialect) IsDatatype(s string) bool {
 		"bit varying":                true,
 		"boolean":                    true,
 		"character large object":     true,
+		"clob":                       true,
 		"character":                  true,
 		"character varying":          true,
 		"char":                       true,
@@ -59,23 +60,32 @@ func (d StandardSQLDialect) IsDatatype(s string) bool {
 		"double precision":           true,
 		"float":                      true,
 		"integer":                    true,
-		"interval":                   true,
 		"int":                        true,
+		"interval":                   true,
+		"interval day to second":     true, // expanded fields
+		"interval year to month":     true, // expanded fields
 		"national character":         true,
 		"national character varying": true,
+		"nclob":                      true,
 		"nchar":                      true,
 		"nchar varying":              true,
 		"numeric":                    true,
 		"real":                       true,
 		"smallint":                   true,
 		"timestamp":                  true,
+		"timestamp with time zone":   true,
 		"time":                       true,
+		"time with time zone":        true,
 		"tinyint":                    true,
 		"varchar":                    true,
+		"xml":                        true,
 	}
 
-	_, ok := sqlStandardDatatypes[strings.ToLower(s)]
-	return ok
+	if _, ok := sqlStandardDatatypes[strings.ToLower(s)]; ok {
+		return true
+	}
+
+	return false
 }
 
 func (d StandardSQLDialect) keyword(s string) (bool, bool) {

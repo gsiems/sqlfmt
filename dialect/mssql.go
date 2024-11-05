@@ -101,6 +101,7 @@ func (d MSSQLDialect) IsDatatype(s string) bool {
 	if _, ok := mssqlDatatypes[k]; ok {
 		return true
 	}
+
 	return false
 }
 

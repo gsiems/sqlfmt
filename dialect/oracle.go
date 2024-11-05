@@ -49,29 +49,30 @@ func (d OracleDialect) IsDatatype(s string) bool {
 		"binary_integer":                 true,
 		"blob":                           true,
 		"boolean":                        true,
-		"char":                           true,
+		"char":                           true, // (n [ byte | char ])
 		"clob":                           true,
 		"date":                           true,
-		"float":                          true,
-		"integer":                        true,
-		"interval day to second":         true,
-		"interval year to month":         true,
+		"float":                          true, // (n)
+		"integer":                        true, // (n)
+		"interval day to second":         true, // interval day (n) to second (x)
+		"interval year to month":         true, // interval year (n) to month
 		"long":                           true,
 		"long raw":                       true,
-		"nchar":                          true,
+		"nchar":                          true, // (n)
 		"nclob":                          true,
-		"number":                         true,
-		"nvarchar2":                      true,
+		"number":                         true, // [(p,s)]
+		"nvarchar2":                      true, // (n)
 		"pls_integer":                    true,
-		"raw":                            true,
+		"raw":                            true, // (n)
 		"ref cursor":                     true,
 		"rowid":                          true,
-		"timestamp":                      true,
-		"timestamp with local time zone": true,
-		"timestamp with time zone":       true,
-		"urowid":                         true,
-		"varchar":                        true,
-		"varchar2":                       true,
+		"smallint":                       true,
+		"timestamp":                      true, // (n)
+		"timestamp with local time zone": true, // timestamp (n) with local time zone
+		"timestamp with time zone":       true, // timestamp (n) with time zone
+		"urowid":                         true, // [(n)]
+		"varchar":                        true, // (n)
+		"varchar2":                       true, // (n [ byte | char ])
 		"identity":                       true,
 	}
 
@@ -79,6 +80,7 @@ func (d OracleDialect) IsDatatype(s string) bool {
 	if _, ok := oracleDatatypes[k]; ok {
 		return true
 	}
+
 
 	// TODO
 	// interval day [(day_precision)] to second [(fractional_seconds_precision)]

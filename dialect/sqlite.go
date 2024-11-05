@@ -77,12 +77,12 @@ func (d SQLiteDialect) IsDatatype(s string) bool {
 		return true
 	}
 
-	// Include checking for an array of the datatype.
-	// TODO Is this a thing in SQLite?
-	k = strings.Replace(k, "[]", "", 1)
-	if _, ok := sqliteDatatypes[k]; ok {
-		return true
-	}
+	// NB column specifications can specify size, precision, or precision and
+	// scale though SQLite doesn't appear to to anything with the extra
+	// information or constrain the data to match the size, precision, or
+	// precision and scale. SQLite will even allow column specifications that
+	// make no sense (such as char(10,2) or number(-5)).
+
 	return false
 }
 

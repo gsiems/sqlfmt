@@ -78,8 +78,11 @@ func (d MariaDBDialect) IsDatatype(s string) bool {
 		"year":             true,
 	}
 
-	_, ok := mariadbDatatypes[strings.ToLower(s)]
-	return ok
+	if _, ok := mariadbDatatypes[strings.ToLower(s)]; ok {
+		return true
+	}
+
+	return false
 }
 
 func (d MariaDBDialect) keyword(s string) (bool, bool) {
@@ -428,7 +431,7 @@ func (d MariaDBDialect) IsLabel(s string) bool {
 	if string(s[len(s)-1]) != ":" {
 		return false
 	}
-	if !d.IsIdentifier(s[0:len(s)-2]) {
+	if !d.IsIdentifier(s[0 : len(s)-2]) {
 		return false
 	}
 	return true

@@ -1,6 +1,9 @@
 package dialect
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type PostgreSQLDialect struct {
 	dialect int
@@ -48,32 +51,51 @@ func (d PostgreSQLDialect) IsDatatype(s string) bool {
 	var pgDatatypes = map[string]bool{
 		"bigint":                      true,
 		"bigserial":                   true,
-		"bit":                         true,
-		"bit varying":                 true,
+		"bit":                         true, // [(n)]
+		"bit varying":                 true, // [(n)]
 		"boolean":                     true,
 		"bool":                        true, // alternate/abbreviated form
 		"box":                         true,
 		"bytea":                       true,
 		"\"char\"":                    true, // datatype seen in pg_catalog
-		"char":                        true, // alternate/abbreviated form
-		"character":                   true,
-		"character varying":           true,
+		"char":                        true, // [(n)] alternate/abbreviated form
+		"character":                   true, // [(n)]
+		"character varying":           true, // [(n)]
 		"cidr":                        true,
 		"circle":                      true,
+		"datemultirange":              true,
+		"daterange":                   true,
 		"date":                        true,
-		"decimal":                     true,
+		"decimal":                     true, // [p[,s])
 		"double precision":            true,
-		"float":                       true, // alternate/abbreviated form
+		"float":                       true, // [(p)] alternate/abbreviated form
 		"float4":                      true, // alternate/abbreviated form
 		"float8":                      true, // alternate/abbreviated form
 		"geometry":                    true, // postgis
 		"inet":                        true,
 		"integer":                     true,
-		"interval":                    true,
 		"int":                         true, // alternate/abbreviated form
 		"int2":                        true, // alternate/abbreviated form
+		"int4multirange":              true,
+		"int4range":                   true,
 		"int4":                        true, // alternate/abbreviated form
+		"int8multirange":              true,
+		"int8range":                   true,
 		"int8":                        true, // alternate/abbreviated form
+		"interval":                    true, // [(p)]
+		"interval day to hour":        true, // expanded fields
+		"interval day to minute":      true, // expanded fields
+		"interval day to second":      true, // expanded fields
+		"interval day":                true, // expanded fields
+		"interval hour to minute":     true, // expanded fields
+		"interval hour to second":     true, // expanded fields
+		"interval hour":               true, // expanded fields
+		"interval minute to second":   true, // expanded fields
+		"interval minute":             true, // expanded fields
+		"interval month":              true, // expanded fields
+		"interval second":             true, // expanded fields
+		"interval year to month":      true, // expanded fields
+		"interval year":               true, // expanded fields
 		"jsonb":                       true,
 		"json":                        true,
 		"line":                        true,
@@ -82,8 +104,9 @@ func (d PostgreSQLDialect) IsDatatype(s string) bool {
 		"macaddr":                     true,
 		"money":                       true,
 		"name":                        true, // datatype seen in pg_catalog
-		"numeric [ (p, s) ]":          true,
-		"numeric":                     true,
+		"numeric":                     true, // [p[,s])
+		"nummultirange":               true,
+		"numrange":                    true,
 		"path":                        true,
 		"pg_lsn":                      true,
 		"pg_snapshot":                 true,
@@ -98,19 +121,41 @@ func (d PostgreSQLDialect) IsDatatype(s string) bool {
 		"timestamptz":                 true, // alternate/abbreviated form
 		"timestamp without time zone": true,
 		"timestamp with time zone":    true,
-		"time":                        true,
+		"time":                        true, // [(p)]
 		"timetz":                      true, // alternate/abbreviated form
-		"time without time zone":      true,
-		"time with time zone":         true,
+		"time without time zone":      true, // time [(p)] without time zone
+		"time with time zone":         true, // time [(p)] with time zone
+		"tsmultirange":                true,
 		"tsquery":                     true,
+		"tsrange":                     true,
+		"tstzmultirange":              true,
+		"tstzrange":                   true,
 		"tsvector":                    true,
 		"txid_snapshot":               true,
 		"uuid":                        true,
-		"varchar":                     true,
+		"varchar":                     true, // [(n)]
 		"xml":                         true,
+		"oid":                         true, // object identifier types
+		"regclass":                    true, // object identifier types
+		"regcollation":                true, // object identifier types
+		"regconfig":                   true, // object identifier types
+		"regdictionary":               true, // object identifier types
+		"regnamespace":                true, // object identifier types
+		"regoper":                     true, // object identifier types
+		"regoperator":                 true, // object identifier types
+		"regproc":                     true, // object identifier types
+		"regprocedure":                true, // object identifier types
+		"regrole":                     true, // object identifier types
+		"regtype":                     true, // object identifier types
 	}
 
 	k := strings.ToLower(s)
+	if _, ok := pgDatatypes[k]; ok {
+		return true
+	}
+
+	// Check for an array of the datatype
+	k = strings.TrimRight(k, "[]")
 	if _, ok := pgDatatypes[k]; ok {
 		return true
 	}
@@ -129,15 +174,17 @@ func (d PostgreSQLDialect) IsDatatype(s string) bool {
 	// "timestamp [ (p) ] [ without time zone ]": true,
 	// "timestamp [ (p) ] with time zone": true,
 
-	// include checking for an array of the datatype
-	k = strings.Replace(k, "[]", "", 1)
-	if _, ok := pgDatatypes[k]; ok {
-		return true
+	a := strings.Split(k, "(")
+
+	switch a[0] {
+	case "time", "timestamp":
+		rtw := regexp.MustCompile(`^` + a[0] + `\( [0-6] \) without time zone$`)
+		rtz := regexp.MustCompile(`^` + a[0] + `\( [0-6] \) with time zone$`)
+		switch {
+		case rtw.MatchString(k), rtz.MatchString(k):
+			return true
+		}
 	}
-
-
-
-
 
 	return false
 }

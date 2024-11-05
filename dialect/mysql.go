@@ -43,37 +43,42 @@ func (d MySQLDialect) MaxOperatorLength() int {
 func (d MySQLDialect) IsDatatype(s string) bool {
 
 	var mysqlDatatypes = map[string]bool{
-		"bigint":           true,
-		"binary":           true,
+		"bigint":           true, // [(n)]
+		"binary":           true, // [(n)]
 		"bit":              true,
 		"blob":             true,
 		"boolean":          true,
 		"bool":             true,
-		"char":             true,
+		"char":             true, // (n)
+		"character":        true, // (n)
 		"datetime":         true,
 		"date":             true,
-		"decimal":          true,
-		"dec":              true,
-		"double precision": true,
-		"double":           true,
+		"decimal":          true, // [(p[,s])]
+		"dec":              true, // [(p[,s])]
+		"double precision": true, // [(p[,s])]
+		"double":           true, // [(p[,s])]
 		"enum":             true,
-		"float":            true,
-		"integer":          true,
-		"int":              true,
+		"float":            true, // [(p[,s])]
+		"integer":          true, // [(n)]
+		"int":              true, // [(n)]
 		"longblob":         true,
 		"longtext":         true,
 		"mediumblob":       true,
-		"mediumint":        true,
+		"mediumint":        true, // (n)
 		"mediumtext":       true,
+		"nchar":            true, // (n)
+		"nvarchar":         true, // (n)
+		"numeric":          true, // (p,s)
+		"real":             true, // (p,s)
 		"set":              true,
-		"smallint":         true,
+		"smallint":         true, // [(n)]
 		"text":             true,
 		"timestamp":        true,
 		"time":             true,
 		"tinyblob":         true,
 		"tinyint":          true,
 		"tinytext":         true,
-		"varbinary":        true,
+		"varbinary":        true, //(n)
 		"varchar":          true,
 		"year":             true,
 	}
@@ -82,6 +87,7 @@ func (d MySQLDialect) IsDatatype(s string) bool {
 	if _, ok := mysqlDatatypes[k]; ok {
 		return true
 	}
+
 	return false
 }
 
@@ -791,7 +797,7 @@ func (d MySQLDialect) IsLabel(s string) bool {
 	if string(s[len(s)-1]) != ":" {
 		return false
 	}
-	if !d.IsIdentifier(s[0:len(s)-2]) {
+	if !d.IsIdentifier(s[0 : len(s)-2]) {
 		return false
 	}
 	return true
