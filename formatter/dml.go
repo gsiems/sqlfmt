@@ -136,7 +136,11 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			case "/":
 				canOpenBag = e.Dialect() == dialect.Oracle
 			default:
-				canOpenBag = pTok.IsBag()
+				if e.Dialect() == dialect.PostgreSQL && isPgBodyBoundary(pNcVal) {
+					canOpenBag = true
+				} else {
+					canOpenBag = pTok.IsBag()
+				}
 			}
 		}
 
