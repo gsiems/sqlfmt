@@ -9,7 +9,7 @@ BaseDir=$(dirname "$0")
     [ -f "$coverageFile" ] && rm "$coverageFile"
     [ -f "$coverageHtml" ] && rm "$coverageHtml"
 
-    find testdata/*/actual -type f -exec rm {} \;
+    find ../testdata/*/actual -type f -exec rm {} \;
 
     echo ""
     echo "### test:"
