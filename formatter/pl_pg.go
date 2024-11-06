@@ -101,8 +101,6 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	plLang := ""
 
 	pKwVal := "" // The upper-case value of the previous keyword token
-	//pNcVal := ""      // The upper-case value of the previous non-comment token
-	//var pTok FmtToken // The previous token
 
 	for _, cTok := range m {
 
@@ -159,10 +157,6 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 					addToBag = true
 
 				default:
-					//if ctVal == ";" {
-					//	closeBag = true
-					//	addToBag = true
-					//} else
 					if canOpenBody {
 						// ASSERT: the previous token was the body boundary
 						openBody = true
@@ -180,7 +174,6 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				switch pKwVal {
 				case "CREATE", "REPLACE":
 					openBag = true
-					// add to bag is inferred
 				}
 			case "DO":
 				openBag = true
@@ -264,20 +257,6 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 				typMap[bodyBagId] = bodyType
 
-				// Check the bagType of the body.
-				// If the bagType differs from the bagType that corresponds to
-				// the language then update the bagType of the body
-				//if len(tokMap[bodyBagId]) > 0 {
-				//	toks := tokMap[bodyBagId]
-                //
-				//	t := toks[0]
-                //
-				//	if t.typeOf != bodyType {
-				//		t.typeOf = bodyType
-				//		toks[0] = t
-				//	}
-				//}
-
 				// Check the bagType of the pointer token for the body.
 				// If the bagType differs from the bagType that corresponds to
 				// the language then update the bagType of the pointer
@@ -314,10 +293,6 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 		////////////////////////////////////////////////////////////////
 		// Cache the previous token(s) data
-		//pTok = cTok
-		//if !cTok.IsCodeComment() {
-		//	pNcVal = ctVal
-		//}
 		if cTok.IsKeyword() {
 			pKwVal = ctVal
 		}
