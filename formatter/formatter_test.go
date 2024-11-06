@@ -22,9 +22,9 @@ func TestSQLFiles(t *testing.T) {
 
 	for _, d := range dialects {
 
-		inputDir := path.Join("testdata", "input", d)
-		parsedDir := path.Join("testdata", "parsed")
-		taggedDir := path.Join("testdata", "tagged")
+		inputDir := path.Join("..", "testdata", "input", d)
+		parsedDir := path.Join("..", "testdata", "parsed")
+		taggedDir := path.Join("..", "testdata", "tagged")
 
 		files, err := ioutil.ReadDir(inputDir)
 		if err != nil {
@@ -57,7 +57,7 @@ func TestSQLFiles(t *testing.T) {
 
 			e.SetInputFile(inputFile)
 
-			p := parser.NewParser(e)
+			p := parser.NewParser(d)
 
 			////////////////////////////////////////////////////////////////////////
 			// Parse the input and compare to expected
