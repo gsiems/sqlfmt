@@ -32,13 +32,13 @@ func NewParser(e *env.Env) *Parser {
 // the SQL being submitted is used to better tokenize the submitted string.
 func (p *Parser) ParseStatements(stmts string) []Token {
 
-	return p.parsePassOne(stmts)
+	return p.tokenizeStatement(stmts)
 }
 
-// parsePassOne is primarily ŏut resolving those tokens that are either
+// tokenizeStatement is primarily about resolving those tokens that are either
 // delimited by standard start/end character strings (like comments and
 // comment blocks), are white-space, or are stand-alone punctuation.
-func (p *Parser) parsePassOne(stmts string) []Token {
+func (p *Parser) tokenizeStatement(stmts string) []Token {
 
 	var tlRe []Token
 
@@ -204,14 +204,14 @@ func (p *Parser) parsePassOne(stmts string) []Token {
 		}
 	}
 
-	return p.parsePassTwo(tlRe)
+	return p.updateTokenTypes(tlRe)
 }
 
-// parsePassTwo takes the output of parsePassOne and attempts to resolve
-// those tokens not resolved in the first pass by inspecting, and splitting,
-// the contents of the token into multiple tokens. This also attempts to
-// resolve if the *enclosed* tokens are for strings or identifiers.
-func (p *Parser) parsePassTwo(tlIn []Token) []Token {
+// updateTokenTypes takes the output of tokenizeStatement and attempts to
+// resolve those tokens not resolved in the first pass by inspecting, and
+// splitting, the contents of the token into multiple tokens. This also
+// attempts to resolve if the *enclosed* tokens are for strings or identifiers.
+func (p *Parser) updateTokenTypes(tlIn []Token) []Token {
 
 	var tlRe []Token
 
@@ -283,121 +283,12 @@ func (p *Parser) parsePassTwo(tlIn []Token) []Token {
 			}
 		}
 	}
-	return p.parsePassThree(tlRe)
+	return p.consolidateStrings(tlRe)
 }
 
-// parsePassThree takes the output of parsePassTwo and deals with the
-// white-space by folding it into the following token (if any).
-func (p *Parser) parsePassThree(tlIn []Token) []Token {
-
-	var tlRe []Token
-
-	leadingSpace := ""
-
-	for _, tc := range tlIn {
-		if leadingSpace != "" {
-			tc.SetLeadingSpace(leadingSpace)
-			leadingSpace = ""
-		} else if tc.typeOf == WhiteSpace {
-			leadingSpace = tc.Value()
-			continue
-		}
-		tlRe = append(tlRe, tc)
-	}
-	return p.parsePassFive(tlRe)
-}
-
-/*
-// parsePassFour combines
-//   - END keywords with the thing being ended (CASE, IF, LOOP)
-//   - GROUP and ORDER with BY
-//   - The myriad forms of JOIN
-func (p *Parser) parsePassFour(tlIn []Token) []Token {
-
-	var tlRe []Token
-
-	idxMax := len(tlIn) - 1
-	idx := -1
-
-	for idx < idxMax {
-		idx++
-
-		tc := tlIn[idx]
-
-		if idx >= idxMax {
-			tlRe = append(tlRe, tc)
-			break
-		}
-
-		if tc.typeOf != Keyword {
-			tlRe = append(tlRe, tc)
-			continue
-		}
-
-		switch strings.ToUpper(tc.Value()) {
-		case "END":
-			tc.SetType(EndToken)
-			tcNext := tlIn[idx+1]
-			switch strings.ToUpper(tcNext.Value()) {
-			case "IF", "CASE", "LOOP":
-				tc.WriteString(" " + tcNext.Value())
-				idx++
-			}
-
-		case "GROUP":
-			tcNext := tlIn[idx+1]
-			switch strings.ToUpper(tcNext.Value()) {
-			case "BY":
-				tc.WriteString(" " + tcNext.Value())
-				tc.SetType(GroupByToken)
-				idx++
-			}
-
-		case "ORDER":
-			tcNext := tlIn[idx+1]
-			switch strings.ToUpper(tcNext.Value()) {
-			case "BY":
-				tc.WriteString(" " + tcNext.Value())
-				tc.SetType(OrderByToken)
-				idx++
-			}
-
-		case "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL":
-			jdx := idx
-			var jstring []string
-			haveJoin := false
-			for jdx < idxMax {
-				jdx++
-				tcJ := tlIn[jdx]
-				switch strings.ToUpper(tcJ.Value()) {
-				case "JOIN":
-					// yay, we're done
-					jstring = append(jstring, tcJ.Value())
-					haveJoin = true
-					break
-				case "INNER", "LEFT", "RIGHT", "FULL", "OUTER":
-					jstring = append(jstring, tcJ.Value())
-				default:
-					// not a proper join
-					break
-				}
-			}
-			if haveJoin {
-				idx = jdx
-				tc.SetType(JoinToken)
-				tc.WriteString(" " + strings.Join(jstring, " "))
-			}
-		}
-
-		tlRe = append(tlRe, tc)
-	}
-	return p.parsePassFive(tlRe)
-}
-*/
-
-// parsePassFive takes the output of parsePassFour and deals with combining,
-// as needed, adjacent SingleQuotedTokens or SingleQuotedTokens that have a
-// preceding decoration (Identifier)
+// consolidateStrings deals with combining, as needed, adjacent
+// SingleQuotedTokens or SingleQuotedTokens that have a preceding decoration
+// (Identifier)
 //
 // Some DBs have the option of preceding a string literal with a bit of text
 // that indicates how to interpret the string literal
@@ -423,7 +314,7 @@ func (p *Parser) parsePassFour(tlIn []Token) []Token {
 //   - MySQL also concatenates string literals:
 //     "'to' ' ' 'do'" is the same as "'to do'" -- I can only assume that this
 //     requires there to be white space between tokens?
-func (p *Parser) parsePassFive(tlIn []Token) []Token {
+func (p *Parser) consolidateStrings(tlIn []Token) []Token {
 
 	var tlRe []Token
 
@@ -452,15 +343,12 @@ func (p *Parser) parsePassFive(tlIn []Token) []Token {
 
 				if tcNext.categoryOf == String {
 
-					if tcNext.hSpace == "" || tcNext.vSpace > 0 {
+					tc.WriteString(tcNext.Value())
 
-						tc.WriteString(tcNext.Value())
-
-						tc.typeOf = tcNext.typeOf
-						tc.categoryOf = tcNext.categoryOf
-						idx++
-						continue
-					}
+					tc.typeOf = tcNext.typeOf
+					tc.categoryOf = tcNext.categoryOf
+					idx++
+					continue
 				}
 				doContinue = false
 			}
@@ -472,6 +360,37 @@ func (p *Parser) parsePassFive(tlIn []Token) []Token {
 		tlRe = append(tlRe, tc)
 	}
 
+	return p.consolidateWhitespace(tlRe)
+}
+
+// consolidateWhitespace consolidates white-space tokens by folding them into
+// the following token (if any).
+func (p *Parser) consolidateWhitespace(tlIn []Token) []Token {
+
+	var tlRe []Token
+
+	leadingSpace := ""
+
+	idxMax := len(tlIn) - 1
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		tc := tlIn[idx]
+
+		if idx == idxMax && tc.typeOf == WhiteSpace {
+			// Preserve any trailing whitespace
+			tlRe = append(tlRe, tc)
+		} else {
+			if leadingSpace != "" {
+				tc.SetLeadingSpace(leadingSpace)
+				leadingSpace = ""
+			} else if tc.typeOf == WhiteSpace {
+				leadingSpace = tc.Value()
+				continue
+			}
+			tlRe = append(tlRe, tc)
+		}
+	}
 	return tlRe
 }
 
