@@ -23,7 +23,7 @@ func TestSQLFiles(t *testing.T) {
 	for _, d := range dialects {
 
 		inputDir := path.Join("..", "testdata", "input", d)
-		parsedDir := path.Join("..", "testdata", "parsed")
+		cleanedDir := path.Join("..", "testdata", "cleaned")
 		taggedDir := path.Join("..", "testdata", "tagged")
 
 		files, err := ioutil.ReadDir(inputDir)
@@ -63,21 +63,25 @@ func TestSQLFiles(t *testing.T) {
 			// Parse the input and compare to expected
 			parsed := p.ParseStatements(input)
 
-			err = writeParsed(parsedDir, d, file.Name(), parsed, e)
+			////////////////////////////////////////////////////////////////////////
+			// "Clean" the tokens and compare to expected
+			cleaned := cleanupParsed(e, parsed)
+
+			err = writeCleaned(cleanedDir, d, file.Name(), cleaned, e)
 			if err != nil {
-				t.Errorf("Error writing parsed for %s: %s", file.Name(), err)
+				t.Errorf("Error writing cleaned for %s: %s", file.Name(), err)
 				continue
 			}
+
 			if verbose {
-				err = compareFiles(parsedDir, d, file.Name())
+				err = compareFiles(taggedDir, d, file.Name())
 				if err != nil {
-					t.Errorf("Error comparing parsed for %s: %s", file.Name(), err)
+					t.Errorf("Error comparing cleaned for %s: %s", file.Name(), err)
 				}
 			}
 
 			////////////////////////////////////////////////////////////////////////
 			// Tag the tokens and compare to expected
-			cleaned := cleanupParsed(e, parsed)
 			bagMap, mainTokens := tagBags(e, cleaned)
 
 			err = writeTagged(taggedDir, d, file.Name(), mainTokens, bagMap, e, "Tagged")
@@ -119,7 +123,7 @@ func compareFiles(dir, d, fName string) error {
 	return err
 }
 
-func writeParsed(dir, d, fName string, tokens []parser.Token, e *env.Env) error {
+func writeCleaned(dir, d, fName string, tokens []FmtToken, e *env.Env) error {
 
 	outFile := path.Join(dir, "actual", d, fName)
 
@@ -134,7 +138,7 @@ func writeParsed(dir, d, fName string, tokens []parser.Token, e *env.Env) error 
 	dn := e.DialectName()
 	fn := e.InputFile()
 
-	toks = append(toks, "Parsed")
+	toks = append(toks, "Cleaned")
 	toks = append(toks, fmt.Sprintf("InputFile   %s", fn))
 	toks = append(toks, fmt.Sprintf("Dialect     %s", dn))
 	toks = append(toks, "")
