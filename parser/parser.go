@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gsiems/sqlfmt/dialect"
-	"github.com/gsiems/sqlfmt/env"
 )
 
 /*
@@ -18,10 +17,10 @@ type Parser struct {
 	dbdialect dialect.DbDialect
 }
 
-func NewParser(e *env.Env) *Parser {
+func NewParser(dName string) *Parser {
 	var p Parser
 
-	p.dbdialect = dialect.NewDialect(e.DialectName())
+	p.dbdialect = dialect.NewDialect(dName)
 
 	return &p
 }
