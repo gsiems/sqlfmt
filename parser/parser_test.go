@@ -62,9 +62,37 @@ func TestSQLFiles(t *testing.T) {
 
 			if string(inBytes) != strings.Join(z, "") {
 				t.Errorf("Error comparing original to re-constructed for %s", file.Name())
+				err := writeReconstructed(parsedDir, d, file.Name(), strings.Join(z, ""))
+				if err != nil {
+					t.Errorf("Error writing parsed for %s: %s", file.Name(), err)
+				}
 			}
 		}
 	}
+}
+
+func writeReconstructed(dir, d, fName, reconstructed string) error {
+
+	outFile := path.Join(dir, "actual", d, fName+".reconstructed")
+
+	f, err := os.OpenFile(outFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	_, err = f.Write([]byte(reconstructed))
+	if err != nil {
+		return err
+	}
+
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+
+	return err
 }
 
 func writeParsed(dir, d, fName string, parsed []Token) error {
