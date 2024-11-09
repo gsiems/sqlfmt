@@ -1,6 +1,10 @@
 package formatter
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/gsiems/sqlfmt/env"
+)
 
 // isPgBodyBoundary determines if the supplied string is a boundary marker for
 // a PostgreSQL function or procedure
@@ -317,3 +321,373 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 	return remainder
 }
+
+func formatPgPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+	switch bagType {
+	case PLxBag:
+		formatPgPLNonBody(e, bagMap, bagType, bagId, baseIndents)
+		//case PLxBody:
+		//	formatPgPLBody(e, bagMap, bagType, bagId, baseIndents)
+	}
+}
+
+func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) string {
+
+	ctVal := cTok.AsUpper()
+
+	switch objType {
+	case "TRIGGER":
+		if pNcVal == objType {
+			return "NAME"
+		}
+
+		switch ctVal {
+		case "TRIGGER":
+			return "TYPE"
+		case "BEFORE", "AFTER", "INSTEAD":
+			return "EVENT"
+		case "ON":
+			return "TABLE"
+		case "NOT":
+			if nNcVal == "DEFERRABLE" {
+				return "DEFERRABLE"
+			}
+		case "DEFERRABLE", "INITIALLY":
+			return "DEFERRABLE"
+		case "REFERENCING", "FOR", "WHEN", "EXECUTE":
+			return ctVal
+		}
+
+	default:
+		switch pNcVal {
+		case objType:
+			return "NAME"
+		default:
+			switch ctVal {
+			case "FUNCTION", "PROCEDURE", "DO":
+				return "TYPE"
+			case "(":
+				if paramLabel == "NAME" {
+					return "SIGNATURE"
+				}
+			case "RETURNS":
+				if paramLabel == "SIGNATURE" {
+					return "RETURNS"
+				} else if nNcVal == "NULL" {
+					return "CALLING MODE"
+				}
+			case "LANGUAGE", "TRANSFORM", "PARALLEL", "COST", "ROWS", "SET", "AS":
+				return ctVal
+			case "IMMUTABLE", "STABLE", "VOLATILE":
+				return "VOLATILE"
+			case "NOT", "LEAKPROOF":
+				return "LEAKPROOF"
+			case "CALLED", "STRICT":
+				return "CALLING MODE"
+			case "EXTERNAL", "SECURITY":
+				return "SECURITY"
+			case ";":
+				return "FINAL"
+			default:
+				switch {
+				case isPgBodyBoundary(ctVal):
+					return "BODY"
+				case cTok.typeOf == PLxBody:
+					return "BODY"
+				}
+			}
+		}
+	}
+
+	return paramLabel
+
+}
+
+func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+
+	key := bagKey(bagType, bagId)
+
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
+
+	// TODO: consider adding a check for, and emitting a warning for SECURITY
+	// DEFINER functions/procedures that do not set a search path or that have
+	// an insecure search path
+
+	idxMax := len(b.tokens) - 1
+	parensDepth := 0
+	objType := ""
+
+	var tFormatted []FmtToken
+	//var cTok FmtToken // The current token
+	var pTok FmtToken // The previous token
+	// var ctVal string  // The upper case value of the current token
+	var pNcVal string // The upper case value of the previous non-comment token
+	//var pKwVal string // The upper case value of the previous keyword token
+
+	// ucKw: The list of keywords that can be set to upper-case
+
+	var ucKw = []string{"AFTER", "AND", "AS", "BEFORE", "CALLED", "CONSTRAINT",
+		"COST", "CREATE", "CURRENT", "DEFAULT", "DEFERRABLE", "DEFERRED",
+		"DEFINER", "DELETE", "DO", "EACH", "EXECUTE", "EXTERNAL", "FOR",
+		"FROM", "FUNCTION", "IMMEDIATE", "IMMUTABLE", "INITIALLY", "INPUT",
+		"INSERT", "INSTEAD", "INVOKER", "LANGUAGE", "LEAKPROOF", "NEW", "NOT",
+		"NULL", "OF", "OLD", "ON", "OR", "PARALLEL", "PROCEDURE",
+		"REFERENCING", "REPLACE", "RESTRICTED", "RETURNS", "ROW", "ROWS",
+		"SAFE", "SECURITY", "SET", "SETOF", "STABLE", "STATEMENT", "STRICT",
+		"SUPPORT", "TABLE", "TO", "TRANSFORM", "TRIGGER", "TRUNCATE", "TYPE",
+		"UNSAFE", "UPDATE", "VOLATILE", "WHEN", "WINDOW"}
+
+	var psLabels = []string{"TYPE", "NAME", "SIGNATURE", "RETURNS", "LANGUAGE",
+		"TRANSFORM", "WINDOW", "VOLATILE", "LEAKPROOF", "CALLING MODE",
+		"SECURITY", "PARALLEL", "COST", "ROWS", "SUPPORT", "SET", "AS",
+		"BODY", "FINAL"}
+
+	var tsLabels = []string{"TYPE", "NAME", "EVENT", "TABLE", "FROM",
+		"DEFERRABLE", "REFERENCING", "FOR", "WHEN", "EXECUTE", "FINAL"}
+
+	var params = make(map[string][]FmtToken)
+	paramLabel := ""
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		cTok := b.tokens[idx]
+		ctVal := cTok.AsUpper()
+
+		switch ctVal {
+		case "FUNCTION", "PROCEDURE", "TRIGGER", "DO":
+			if objType == "" {
+				objType = ctVal
+			}
+		}
+
+		// Update keyword capitalization as needed
+		// Identifiers should have been properly cased in cleanupParsed
+		if cTok.IsKeyword() {
+			// check for language
+			switch pNcVal {
+			case "LANGUAGE":
+			// nada
+			default:
+				//if objType == "TRIGGER" {
+				//	cTok.SetKeywordCase(e, ucTKw)
+				//} else {
+				cTok.SetKeywordCase(e, ucKw)
+				//}
+			}
+		}
+
+		switch ctVal {
+		case "DO", "SAFE", "UNSAFE":
+			cTok.SetKeywordCase(e, ucKw)
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Re-order the parameters of the function/procedure declaration to
+		// match that found in the PostgreSQL documentation.
+
+		// Determine the lines
+		if cTok.IsCodeComment() {
+
+			// If there is a comment then it is probably for the param
+			// associated with the next non-comment token, so determine what
+			// the label for the next non-comment token would be so the comment
+			// can remain with the following param.
+
+			// get the next non-comment token...
+			nNcIdx := 0
+			var nNcTok FmtToken
+
+			if idx+1 < idxMax {
+				for j := idx + 1; j <= idxMax; j++ {
+					if !b.tokens[j].IsCodeComment() {
+						nNcTok = b.tokens[j]
+						nNcIdx = j
+						break
+					}
+				}
+			}
+
+			// ...and the next non-comment value after that
+			nNcVal := ""
+			if nNcIdx < idxMax {
+				for j := nNcIdx + 1; j <= idxMax; j++ {
+					if !b.tokens[j].IsCodeComment() {
+						nNcVal = b.tokens[j].AsUpper()
+						break
+					}
+				}
+			}
+
+			paramLabel = pgParamLabel(objType, paramLabel, pNcVal, nNcVal, nNcTok)
+		} else {
+
+			// get the next non-comment value
+			nNcVal := ""
+			if idx < idxMax {
+				for j := idx + 1; j <= idxMax; j++ {
+					if !b.tokens[j].IsCodeComment() {
+						nNcVal = b.tokens[j].AsUpper()
+						break
+					}
+				}
+			}
+
+			paramLabel = pgParamLabel(objType, paramLabel, pNcVal, nNcVal, cTok)
+		}
+
+		params[paramLabel] = append(params[paramLabel], cTok)
+
+		// Set the various "previous token" values
+		pTok = cTok
+		if !cTok.IsCodeComment() {
+			pNcVal = ctVal
+		}
+	}
+
+	var sLabels []string
+	switch objType {
+	case "TRIGGER":
+		sLabels = tsLabels
+	default:
+		sLabels = psLabels
+	}
+
+	// TODO: If there is a signature then format that
+
+	for _, sn := range sLabels {
+		if toks, ok := params[sn]; ok {
+			parensDepth = 0
+
+			for idx, cTok := range toks {
+
+				ctVal := cTok.AsUpper()
+
+				ensureVSpace := false
+				honorVSpace := false
+
+				switch sn {
+				case "TYPE", "NAME", "SIGNATURE", "SET", "AS":
+				//nada
+                case "BODY", "FINAL":
+                ensureVSpace = cTok.IsPLBag() || pTok.IsPLBag()
+				default:
+					ensureVSpace = idx == 0
+				}
+
+				switch ctVal {
+				case "(":
+					parensDepth++
+				case ")":
+					parensDepth--
+				}
+
+				switch sn {
+				case "SIGNATURE":
+					if parensDepth == 1 {
+						switch pNcVal {
+						case "(", ",":
+							ensureVSpace = true
+						}
+					}
+				case "SET", "AS":
+					if ctVal == sn {
+						ensureVSpace = true
+					}
+				}
+
+				switch {
+				case cTok.IsCodeComment(), pTok.IsCodeComment():
+					honorVSpace = true
+				}
+
+				cTok.AdjustVSpace(ensureVSpace, honorVSpace)
+
+				if cTok.vSpace > 0 {
+
+					indents := baseIndents + parensDepth
+
+					if objType == "TRIGGER" {
+						indents++
+					}
+
+					cTok.AdjustIndents(indents)
+				} else {
+					cTok.AdjustHSpace(e, pTok)
+				}
+
+				// Set the various "previous token" values
+				pTok = cTok
+				if !cTok.IsCodeComment() {
+					pNcVal = ctVal
+				}
+
+				tFormatted = append(tFormatted, cTok)
+			}
+		}
+	}
+
+	// Replace the mapped tokens with the newly formatted tokens
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
+}
+
+/*
+
+formatting...
+
+
+
+
+
+
+CREATE [ OR REPLACE ] FUNCTION name                                                         | name          | nl after function
+     ( [ [ argmode ] [ argname ] argtype [ { DEFAULT | = } default_expr ] [, ...] ] )       | signature     | after name
+    [ RETURNS rettype  | RETURNS TABLE ( column_name column_type [, ...] ) ]                | returns       | after signature
+  { LANGUAGE lang_name                                                                      | language      |
+    | TRANSFORM { FOR TYPE type_name } [, ... ]                                             | transform     |
+    | WINDOW                                                                                | window        |
+    | { IMMUTABLE | STABLE | VOLATILE }                                                     | volatile      |
+    | [ NOT ] LEAKPROOF                                                                     | leakproof     | check next token
+    | { CALLED ON NULL INPUT | RETURNS NULL ON NULL INPUT | STRICT }                        | calling mode  |
+    | { [ EXTERNAL ] SECURITY INVOKER | [ EXTERNAL ] SECURITY DEFINER }                     | security      |
+    | PARALLEL { UNSAFE | RESTRICTED | SAFE }                                               | parallel      |
+    | COST execution_cost                                                                   | cost          |
+    | ROWS result_rows                                                                      | rows          |
+    | SUPPORT support_function                                                              | support       |
+    | SET configuration_parameter { TO value | = value | FROM CURRENT }                     | set config    | can be list of SETs
+    | AS 'definition'                                                                       | as            |
+    | AS 'obj_file', 'link_symbol'                                                          | as            |
+    | sql_body                                                                              | body          |
+  } ...
+
+CREATE [ OR REPLACE ] PROCEDURE name                                                        | name          |
+    ( [ [ argmode ] [ argname ] argtype [ { DEFAULT | = } default_expr ] [, ...] ] )        | signature     |
+  { LANGUAGE lang_name                                                                      | language      |
+    | TRANSFORM { FOR TYPE type_name } [, ... ]                                             | transform     |
+    | [ EXTERNAL ] SECURITY INVOKER | [ EXTERNAL ] SECURITY DEFINER                         | security      |
+    | SET configuration_parameter { TO value | = value | FROM CURRENT }                     | set config    |
+    | AS 'definition'                                                                       | as            |
+    | AS 'obj_file', 'link_symbol'                                                          | as            |
+    | sql_body                                                                              | body          |
+  } ...
+
+CREATE [ OR REPLACE ] [ CONSTRAINT ] TRIGGER name                                           | name          |
+    { BEFORE | AFTER | INSTEAD OF } { event [ OR ... ] }                                    | event         |
+    ON table_name                                                                           | table         |
+    [ FROM referenced_table_name ]                                                          | from          |
+    [ NOT DEFERRABLE | [ DEFERRABLE ] [ INITIALLY IMMEDIATE | INITIALLY DEFERRED ] ]        | deferrable    | check next token
+    [ REFERENCING { { OLD | NEW } TABLE [ AS ] transition_relation_name } [ ... ] ]         | referencing   |
+    [ FOR [ EACH ] { ROW | STATEMENT } ]                                                    | for           |
+    [ WHEN ( condition ) ]                                                                  | when          |
+    EXECUTE { FUNCTION | PROCEDURE } function_name ( arguments )                            | execute       |
+
+where event can be one of:
+
+    INSERT
+    UPDATE [ OF column_name [, ... ] ]
+    DELETE
+    TRUNCATE
+
+*/

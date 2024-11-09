@@ -115,3 +115,14 @@ git add formatter/*.go dev_notes/
 
 git commit -m "Added tagging for PostgreSQL functions and procedures."
 ```
+
+## Day 6
+
+Having separated the PostgreSQL functions and procedures into body vs. non-body
+as part of the tagging, the two can be formatted separately.
+
+```
+git add formatter/*.go dev_notes/
+
+git commit -m "Added formatting of the non-body portion of PostgreSQL functions and procedures."
+```

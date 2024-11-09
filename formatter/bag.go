@@ -177,3 +177,21 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 
 	return remainder
 }
+
+
+func UpsertMappedBag(bagMap map[string]TokenBag, bagType, bagId int, forObj string, tokens []FmtToken) {
+
+	key := bagKey(bagType, bagId)
+
+	_, ok := bagMap[key]
+	if ok {
+		delete(bagMap, key)
+	}
+
+	bagMap[key] = TokenBag{
+		id:     bagId,
+		typeOf: bagType,
+		forObj: forObj,
+		tokens: tokens,
+	}
+}

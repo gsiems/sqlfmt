@@ -27,8 +27,16 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 	remainder := tagComment(e, m, bagMap)
 	remainder = tagDCL(e, remainder, bagMap)
 	remainder = tagDML(e, remainder, bagMap)
-	remainder = tagPLx(e, remainder, bagMap)
-	remainder = tagDDL(e, remainder, bagMap)
+
+	switch e.Dialect() {
+	case dialect.PostgreSQL:
+		// TODO: for now at least. need to revisit once other DBs (especially
+		// Oracle) are better sorted
+
+		remainder = tagPLx(e, remainder, bagMap)
+		//remainder = tagDDL(e, remainder, bagMap)
+
+	}
 
 	return bagMap, remainder
 }
@@ -137,6 +145,8 @@ func cleanupParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 			vSpace:     vSpace,
 			hSpace:     cTok.HSpace(),
 			value:      tText,
+			vSpaceOrig:     vSpace,
+			hSpaceOrig:     cTok.HSpace(),
 		})
 
 		if tCategory == parser.Keyword {
@@ -145,4 +155,127 @@ func cleanupParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 	}
 
 	return cleaned
+}
+
+func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
+
+	// remember that bagMap is a pointer to the map, not a copy of the map
+
+	var mainTokens []FmtToken
+	parensDepth := 0
+
+	for _, cTok := range m {
+
+		switch {
+		case cTok.IsBag():
+			formatBag(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
+		//case cTok.IsComment():
+		//	cTok = formatComment(e, cTok, parensDepth)
+		default:
+			switch cTok.value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			}
+		}
+		mainTokens = append(mainTokens, cTok)
+	}
+
+	return mainTokens
+}
+
+func formatBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+
+	// remember that bagMap is a pointer to the map, not a copy of the map
+
+	key := bagKey(bagType, bagId)
+
+	if b, ok := bagMap[key]; ok {
+
+		switch b.typeOf {
+		//case DCLBag:
+		//	formatDCLBag(e, bagMap, b.typeOf, b.id, baseIndents)
+		//case DDLBag:
+		//	formatDDLBag(e, bagMap, b.typeOf, b.id, baseIndents)
+		//case DMLBag:
+		//	formatDMLBag(e, bagMap, b.typeOf, b.id, baseIndents)
+		case PLxBag, PLxBody:
+			formatPLxBag(e, bagMap, b.typeOf, b.id, baseIndents)
+		case DNFBag:
+			// nada
+		}
+	}
+}
+
+func untagBags(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
+
+	tl1 := m
+	guard := 0
+
+	// Iterate for as long as there are mapped bags to accommodate nested DML and PL
+	found := true
+	for found {
+		found = false
+
+		tl2 := make([]FmtToken, 0)
+
+		for _, cTok := range tl1 {
+
+			if cTok.IsBag() {
+
+				// get the key
+				// look up the key in the map
+				// copy the tokens from the map
+				key := bagKey(cTok.typeOf, cTok.id)
+
+				tb, ok := bagMap[key]
+				if ok {
+					tl2 = append(tl2, tb.tokens...)
+					found = true
+				} else {
+					tl2 = append(tl2, cTok)
+				}
+
+			} else {
+				tl2 = append(tl2, cTok)
+			}
+		}
+
+		guard++
+		if guard > 20 {
+			// 1. Do we want to retain the guard?
+			// 2. Is 20 a reasonable guard limit?
+			// 3. If the guard is exceeded then should we log this?
+			found = false
+		}
+
+		tl1 = tl2
+
+	}
+	return tl1
+}
+
+func combineTokens(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) string {
+
+	tokens := untagBags(m, bagMap)
+
+	var z []string
+
+	for _, tc := range tokens {
+		if tc.vSpace > 0 {
+			z = append(z, strings.Repeat("\n", tc.vSpace))
+			if tc.indents > 0 {
+				z = append(z, strings.Repeat(e.Indent(), tc.indents))
+			}
+		} else if tc.hSpace != "" {
+			z = append(z, tc.hSpace)
+		}
+
+		z = append(z, tc.value)
+	}
+
+	z = append(z, "\n")
+
+	return strings.Join(z, "")
 }

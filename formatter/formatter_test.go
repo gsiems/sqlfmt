@@ -25,6 +25,8 @@ func TestSQLFiles(t *testing.T) {
 		inputDir := path.Join("..", "testdata", "input", d)
 		cleanedDir := path.Join("..", "testdata", "cleaned")
 		taggedDir := path.Join("..", "testdata", "tagged")
+		formattedDir := path.Join("..", "testdata", "formatted")
+		outputDir := path.Join("..", "testdata", "output")
 
 		files, err := ioutil.ReadDir(inputDir)
 		if err != nil {
@@ -95,6 +97,38 @@ func TestSQLFiles(t *testing.T) {
 				if err != nil {
 					t.Errorf("Error comparing tagged for %s: %s", file.Name(), err)
 				}
+			}
+
+			////////////////////////////////////////////////////////////////////////
+			// Format the tokens and compare to expected
+			fmtTokens := formatBags(e, mainTokens, bagMap)
+
+			err = writeTagged(formattedDir, d, file.Name(), fmtTokens, bagMap, e, "Formatted")
+			if err != nil {
+				t.Errorf("Error writing formatted for %s: %s", file.Name(), err)
+				continue
+			}
+
+			if verbose {
+				err = compareFiles(formattedDir, d, file.Name())
+				if err != nil {
+					t.Errorf("Error comparing formatted for %s: %s", file.Name(), err)
+				}
+			}
+
+			////////////////////////////////////////////////////////////////////////
+			// Recombine the tokens and write the final output
+			fmtStatement := combineTokens(e, mainTokens, bagMap)
+
+			err = writeOutput(outputDir, d, file.Name(), fmtStatement)
+			if err != nil {
+				t.Errorf("Error writing final for %s: %s", file.Name(), err)
+				continue
+			}
+
+			err = compareFiles(outputDir, d, file.Name())
+			if err != nil {
+				t.Errorf("Error comparing final for %s: %s", file.Name(), err)
 			}
 
 		}
@@ -236,6 +270,29 @@ func writeTagged(dir, d, fName string, m []FmtToken, bagMap map[string]TokenBag,
 	}
 
 	_, err = f.Write([]byte(strings.Join(toks, "\n")))
+	if err != nil {
+		return err
+	}
+
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+
+	return err
+}
+
+func writeOutput(dir, d, fName string, statement string) error {
+
+	outFile := path.Join(dir, "actual", d, fName)
+	f, err := os.OpenFile(outFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	_, err = f.Write([]byte(statement))
 	if err != nil {
 		return err
 	}
