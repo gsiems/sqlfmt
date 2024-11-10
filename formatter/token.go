@@ -18,8 +18,8 @@ type FmtToken struct {
 	indents       int    // the count of indentations preceding the token
 	hSpace        string // the non-indentation horizontal white-space preceding the token
 	value         string // the non-white-space text of the token
-	vSpaceOrig    int
-	hSpaceOrig    string
+	vSpaceOrig    int    // the original preceding vertical white-space value as parsed
+	hSpaceOrig    string // the original preceding horizontal white-space value as parsed
 }
 
 // AsUpper returns the token value as upper-case, mostly for comparison purposes
@@ -37,6 +37,10 @@ func (t *FmtToken) IsBag() bool {
 
 func (t *FmtToken) IsCodeComment() bool {
 	return t.categoryOf == parser.Comment
+}
+
+func (t *FmtToken) IsDatatype() bool {
+	return t.categoryOf == parser.Datatype
 }
 
 func (t *FmtToken) IsIdentifier() bool {
@@ -144,11 +148,11 @@ func (t *FmtToken) AdjustVSpace(ensureVSpace, honorVSpace bool) {
 }
 
 func (t *FmtToken) EnsureVSpace() {
-	switch t.vSpace {
+	switch t.vSpaceOrig {
 	case 0:
 		t.vSpace = 1
 	case 1, 2:
-	// leave as is
+		t.vSpace = t.vSpaceOrig
 	default:
 		// 3 or more...
 		t.vSpace = 2
@@ -156,9 +160,9 @@ func (t *FmtToken) EnsureVSpace() {
 }
 
 func (t *FmtToken) HonorVSpace() {
-	switch t.vSpace {
+	switch t.vSpaceOrig {
 	case 0, 1, 2:
-	// leave as is
+		t.vSpace = t.vSpaceOrig
 	default:
 		// 3 or more...
 		t.vSpace = 2
