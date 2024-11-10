@@ -193,6 +193,8 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				vSpace:     cTok.vSpace,
 				indents:    cTok.indents,
 				hSpace:     cTok.hSpace,
+				vSpaceOrig: cTok.vSpaceOrig,
+				hSpaceOrig: cTok.hSpaceOrig,
 			})
 
 			// ...and start the new bag
@@ -210,6 +212,8 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				vSpace:     cTok.vSpace,
 				indents:    cTok.indents,
 				hSpace:     cTok.hSpace,
+				vSpaceOrig: cTok.vSpaceOrig,
+				hSpaceOrig: cTok.hSpaceOrig,
 			})
 
 			// ...and start the child bag

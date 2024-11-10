@@ -32,7 +32,7 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	bagId := 0
 	parensDepth := 0
 	ddlAction := ""
-//forObj := ""
+	//forObj := ""
 
 	//pKwVal := ""      // The upper-case value of the previous keyword token
 	pNcVal := ""      // The upper-case value of the previous non-comment token
@@ -77,7 +77,7 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 					case cTok.IsDMLBag(), cTok.IsPLBag():
 						closeBag = true
 						addToBag = true
-                    case ctVal == ";":
+					case ctVal == ";":
 						closeBag = true
 						addToBag = true
 					}
@@ -129,9 +129,9 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		//case isInBag && closeBag:
 		case isInBag && closeBag:
 
-            if addToBag {
-                bagTokens = append(bagTokens, cTok)
-            }
+			if addToBag {
+				bagTokens = append(bagTokens, cTok)
+			}
 
 			// Close the bag
 			isInBag = false
@@ -145,8 +145,6 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			}
 
 			//forObj = ""
-
-
 
 			bagId = 0
 			bagTokens = nil
@@ -171,14 +169,14 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				vSpace:     cTok.vSpace,
 				indents:    cTok.indents,
 				hSpace:     cTok.hSpace,
+				vSpaceOrig: cTok.vSpaceOrig,
+				hSpaceOrig: cTok.hSpaceOrig,
 			})
 
 		default:
 			// We are not currently in a bag and we aren't opening one either
 			remainder = append(remainder, cTok)
 		}
-
-
 
 		////////////////////////////////////////////////////////////////
 		// Cache the previous token(s) data
