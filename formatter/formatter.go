@@ -133,20 +133,13 @@ func cleanupParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 			}
 		}
 
-		vSpace := cTok.VSpace()
-		if vSpace > 2 {
-			vSpace = 2
-		}
-
 		cleaned = append(cleaned, FmtToken{
 			id:         id,
 			categoryOf: tCategory,
 			typeOf:     tType,
-			vSpace:     vSpace,
-			hSpace:     cTok.HSpace(),
 			value:      tText,
-			vSpaceOrig:     vSpace,
-			hSpaceOrig:     cTok.HSpace(),
+			vSpaceOrig: cTok.VSpace(),
+			hSpaceOrig: cTok.HSpace(),
 		})
 
 		if tCategory == parser.Keyword {
