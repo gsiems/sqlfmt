@@ -8,10 +8,12 @@ import (
 )
 
 type TokenBag struct {
-	id     int        // the ID for the bag
-	typeOf int        // the type of token bag
-	forObj string     // the name of the kind of object that the bag is for (not all bag types care)
-	tokens []FmtToken // the list of tokens that make up the bag
+	id       int        // the ID for the bag
+	typeOf   int        // the type of token bag
+	forObj   string     // the name of the kind of object that the bag is for (not all bag types care)
+	tokens   []FmtToken // the list of tokens that make up the bag
+	warnings []string   // list of (non-fatal) warnings found
+	errors   []string   // list of (fatal) errors found
 }
 
 func bagKey(bagType, bagId int) string {
@@ -149,6 +151,8 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 				vSpace:     cTok.vSpace,
 				indents:    cTok.indents,
 				hSpace:     cTok.hSpace,
+				vSpaceOrig: cTok.vSpaceOrig,
+				hSpaceOrig: cTok.hSpaceOrig,
 			})
 
 		default:
@@ -177,7 +181,6 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 
 	return remainder
 }
-
 
 func UpsertMappedBag(bagMap map[string]TokenBag, bagType, bagId int, forObj string, tokens []FmtToken) {
 
