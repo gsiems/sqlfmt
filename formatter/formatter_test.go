@@ -18,15 +18,31 @@ func TestSQLFiles(t *testing.T) {
 
 	verbose := false
 
-	dialects := []string{"mariadb", "mssql", "mysql", "oracle", "postgresql", "sqlite", "standard"}
+	baseDir := path.Join("..", "testdata")
 
-	for _, d := range dialects {
+	//dialects := []string{"mariadb", "mssql", "mysql", "oracle", "postgresql", "sqlite", "standard"}
 
-		inputDir := path.Join("..", "testdata", "input", d)
-		cleanedDir := path.Join("..", "testdata", "cleaned")
-		taggedDir := path.Join("..", "testdata", "tagged")
-		formattedDir := path.Join("..", "testdata", "formatted")
-		outputDir := path.Join("..", "testdata", "output")
+	dataDir := path.Join(baseDir, "input")
+
+	rd, err := os.ReadDir(dataDir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	for _, f := range rd {
+
+		if !f.IsDir() {
+			continue
+		}
+
+		d := f.Name()
+
+		inputDir := path.Join(dataDir, d)
+		cleanedDir := path.Join(baseDir, "cleaned")
+		taggedDir := path.Join(baseDir, "tagged")
+		formattedDir := path.Join(baseDir, "formatted")
+		outputDir := path.Join(baseDir, "output")
 
 		files, err := ioutil.ReadDir(inputDir)
 		if err != nil {
@@ -63,7 +79,12 @@ func TestSQLFiles(t *testing.T) {
 
 			////////////////////////////////////////////////////////////////////////
 			// Parse the input and compare to expected
-			parsed := p.ParseStatements(input)
+			var parsed []parser.Token
+			parsed, err = p.ParseStatements(input)
+			if err != nil {
+				t.Errorf("Error parsing input for %s (%s)", file.Name(), err)
+				continue
+			}
 
 			////////////////////////////////////////////////////////////////////////
 			// "Clean" the tokens and compare to expected

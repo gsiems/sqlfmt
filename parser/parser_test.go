@@ -11,16 +11,32 @@ import (
 
 func TestSQLFiles(t *testing.T) {
 
-	dialects := []string{"mariadb", "mssql", "mysql", "oracle", "postgresql", "sqlite", "standard"}
+	baseDir := path.Join("..", "testdata")
 
-	for _, d := range dialects {
+	//dialects := []string{"mariadb", "mssql", "mysql", "oracle", "postgresql", "sqlite", "standard"}
 
-		inputDir := path.Join("..", "testdata", "input", d)
-		parsedDir := path.Join("..", "testdata", "parsed")
+	dataDir := path.Join(baseDir, "input")
 
-		files, err := ioutil.ReadDir(inputDir)
+	rd, err := os.ReadDir(dataDir)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	for _, f := range rd {
+
+		if !f.IsDir() {
+			continue
+		}
+
+		d := f.Name()
+
+		inputDir := path.Join(dataDir, d)
+		parsedDir := path.Join(baseDir, "parsed")
+
+		files, err := os.ReadDir(inputDir)
 		if err != nil {
-			t.Errorf("%s", err)
+			t.Error(err)
 		}
 
 		for _, file := range files {
@@ -40,7 +56,28 @@ func TestSQLFiles(t *testing.T) {
 			p := NewParser(d)
 
 			////////////////////////////////////////////////////////////////////////
-			parsed := p.ParseStatements(input)
+			var parsed []Token
+			parsed, err = p.ParseStatements(input)
+			if err != nil {
+				t.Errorf("Error parsing input for %s (%s)", file.Name(), err)
+
+				var z []string
+
+				for _, tc := range parsed {
+					if tc.vSpace > 0 {
+						z = append(z, strings.Repeat("\n", tc.vSpace))
+					}
+					if tc.hSpace != "" {
+						z = append(z, tc.hSpace)
+					}
+					z = append(z, tc.Value())
+				}
+
+				err := writeReconstructed(parsedDir, d, file.Name(), strings.Join(z, ""))
+				if err != nil {
+					t.Errorf("Error writing reconstructed for %s: %s", file.Name(), err)
+				}
+			}
 
 			err = writeParsed(parsedDir, d, file.Name(), parsed)
 			if err != nil {
@@ -48,25 +85,6 @@ func TestSQLFiles(t *testing.T) {
 				continue
 			}
 
-			var z []string
-
-			for _, tc := range parsed {
-				if tc.vSpace > 0 {
-					z = append(z, strings.Repeat("\n", tc.vSpace))
-				}
-				if tc.hSpace != "" {
-					z = append(z, tc.hSpace)
-				}
-				z = append(z, tc.Value())
-			}
-
-			if string(inBytes) != strings.Join(z, "") {
-				t.Errorf("Error comparing original to re-constructed for %s", file.Name())
-				err := writeReconstructed(parsedDir, d, file.Name(), strings.Join(z, ""))
-				if err != nil {
-					t.Errorf("Error writing parsed for %s: %s", file.Name(), err)
-				}
-			}
 		}
 	}
 }

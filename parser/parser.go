@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -29,9 +30,39 @@ func NewParser(dName string) *Parser {
 // statements and/or procedural SQL blocks and splits them into a list
 // of word, symbol, comment, quoted string, etc. tokens. The dialect of
 // the SQL being submitted is used to better tokenize the submitted string.
-func (p *Parser) ParseStatements(stmts string) []Token {
+func (p *Parser) ParseStatements(input string) ([]Token, error) {
 
-	return p.tokenizeStatement(stmts)
+	parsed := p.tokenizeStatement(input)
+	_, err := p.validateParsed(input, parsed)
+	if err != nil {
+		var toks []Token
+		return toks, err
+	}
+	return parsed, nil
+}
+
+// validateParsed compares the input with the results of reconstructing the
+// parsed tokens to verify if the input was parsed without error.
+func (p *Parser) validateParsed(input string, parsed []Token) (bool, error) {
+
+	var z []string
+	var err error
+
+	for _, tc := range parsed {
+		if tc.vSpace > 0 {
+			z = append(z, strings.Repeat("\n", tc.vSpace))
+		}
+		if tc.hSpace != "" {
+			z = append(z, tc.hSpace)
+		}
+		z = append(z, tc.Value())
+	}
+
+	passed := strings.TrimRight(input, "\n\r\t ") == strings.TrimRight(strings.Join(z, ""), "\n\r\t ")
+	if !passed {
+		err = errors.New("Parsed input failed validation")
+	}
+	return passed, err
 }
 
 // tokenizeStatement is primarily about resolving those tokens that are either
