@@ -1,6 +1,7 @@
 package formatter
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gsiems/sqlfmt/dialect"
@@ -36,6 +37,52 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 		remainder = tagPLx(e, remainder, bagMap)
 		//remainder = tagDDL(e, remainder, bagMap)
 
+	}
+
+	// Check for warnings and errors
+	var warnings []string // list of (non-fatal) warnings found
+	var errors []string   // list of (fatal) errors found
+
+	for _, bag := range bagMap {
+
+		if len(bag.warnings) > 0 {
+			warnings = append(warnings, bag.warnings)
+		}
+		if len(bag.errors) > 0 {
+			errors = append(errors, bag.errors)
+		}
+
+		parensDepth := 0
+
+		for _, t := range bag.tokens {
+			switch t.value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			}
+		}
+
+		if parensDepth != 0 {
+
+			label := ""
+			switch bag.typeOf {
+			case DCLBag:
+				label = "DCL statement"
+			case DDLBag:
+				label = "DDL statement"
+			case DMLBag:
+				label = "DML statement"
+			case PLxBag, PLxBody:
+				label = "PL code"
+			}
+
+			if bag.forObj != "" {
+				errors = append(errors, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s for ", parensDepth, label, forObj))
+			} else {
+				errors = append(errors, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s", parensDepth, label))
+			}
+		}
 	}
 
 	return bagMap, remainder
