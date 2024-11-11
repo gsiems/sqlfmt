@@ -51,6 +51,10 @@ func (t *FmtToken) IsKeyword() bool {
 	return t.categoryOf == parser.Keyword
 }
 
+func (t *FmtToken) IsLabel() bool {
+	return t.categoryOf == parser.Label
+}
+
 func (t *FmtToken) IsPLBag() bool {
 	switch t.typeOf {
 	case PLxBag, PLxBody:
