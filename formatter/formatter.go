@@ -67,6 +67,8 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 
 			label := ""
 			switch bag.typeOf {
+			case CommentBag: // should really never, ever, ever happen unless there was some fat-fingering going on
+				label = "COMMENT ON statement"
 			case DCLBag:
 				label = "DCL statement"
 			case DDLBag:
