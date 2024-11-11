@@ -198,6 +198,8 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				vSpace:     cTok.vSpace,
 				indents:    cTok.indents,
 				hSpace:     cTok.hSpace,
+				vSpaceOrig: cTok.vSpaceOrig,
+				hSpaceOrig: cTok.hSpaceOrig,
 			})
 
 			// ...and start the new bag
@@ -217,6 +219,8 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				vSpace:     cTok.vSpace,
 				indents:    cTok.indents,
 				hSpace:     cTok.hSpace,
+				vSpaceOrig: cTok.vSpaceOrig,
+				hSpaceOrig: cTok.hSpaceOrig,
 			})
 
 			// ...and start the body bag
@@ -326,8 +330,8 @@ func formatPgPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, base
 	switch bagType {
 	case PLxBag:
 		formatPgPLNonBody(e, bagMap, bagType, bagId, baseIndents)
-		//case PLxBody:
-		//	formatPgPLBody(e, bagMap, bagType, bagId, baseIndents)
+	case PLxBody:
+		formatPgPLBody(e, bagMap, bagType, bagId, baseIndents)
 	}
 }
 
@@ -400,7 +404,222 @@ func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) str
 	}
 
 	return paramLabel
+}
 
+func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+
+	key := bagKey(bagType, bagId)
+
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
+
+	idxMax := len(b.tokens) - 1
+	parensDepth := 0
+	var bbStack plStack
+
+	var tFormatted []FmtToken
+	var pTok FmtToken // The previous token
+	var pNcVal string // The upper case value of the previous non-comment token
+	var pKwVal string // The upper case value of the previous keyword token
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		cTok := b.tokens[idx]
+		ctVal := cTok.AsUpper()
+
+		////////////////////////////////////////////////////////////////
+		// Update keyword capitalization as needed
+		// Identifiers should have been properly cased in cleanupParsed
+		if cTok.IsKeyword() && !cTok.IsDatatype() {
+			cTok.SetKeywordCase(e, []string{ctVal})
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Update the block/branch stack
+		switch ctVal {
+		case "DECLARE", "BEGIN", "EXCEPTION":
+			bbStack.Upsert(ctVal)
+		case "IF", "LOOP", "CASE":
+			// WHILE/FOR vs. LOOP???
+			if pNcVal != "END" {
+				bbStack.Push(ctVal)
+			}
+		case "END":
+			_ = bbStack.Pop()
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Determine the preceding vertical spacing (if any)
+		honorVSpace := idx == 0
+		ensureVSpace := false
+
+		// Determine if a new-line should be applied before specific tokens
+		switch ctVal {
+		case "BEGIN", "BREAK", "CALL", "CLOSE", "CONTINUE", "DECLARE",
+			"ELSE", "ELSEIF", "ELSIF", "END", "EXCEPTION", "EXECUTE", "EXIT",
+			"FOR", "OPEN", "RETURN", "WHILE":
+
+			ensureVSpace = true
+
+		case "IF", "CASE":
+			if pNcVal != "END" {
+				ensureVSpace = true
+			}
+
+		case "LOOP":
+			if pNcVal != "END" {
+				ensureVSpace = true
+			}
+
+		case "WHEN":
+			if bbStack.Last() == "CASE" {
+				ensureVSpace = true
+			}
+			if bbStack.LastBlock() == "EXCEPTION" {
+				ensureVSpace = true
+			}
+		}
+
+		// Determine if a new-line should be applied after specific tokens.
+		switch {
+		case pTok.IsLabel(), pTok.IsCodeComment():
+			// Not yet. Checked here so it doesn't need checking for each pNcVal case
+		case cTok.IsLabel(), cTok.IsCodeComment():
+			// Not yet. Checked here so it doesn't need checking for each pNcVal case
+		default:
+
+			switch pNcVal {
+			case ";", "ELSE":
+				ensureVSpace = true
+
+			case "LOOP":
+				if ctVal != ";" {
+					ensureVSpace = true
+				}
+
+			case "DECLARE":
+				// it would be nice to always have a new-line after DECLARE, but...
+				// since some code uses DECLARE before each individual variable
+				// (ESRI comes to mind) it can't be assumed that there will be a
+				// new-line after
+				honorVSpace = true
+
+			case "BEGIN":
+				if ctVal != "ATOMIC" {
+					ensureVSpace = true
+				}
+
+			case "RAISE":
+				// whatever is being raised, we want no v-space
+				ensureVSpace = false
+				honorVSpace = false
+
+			case "THEN":
+				switch {
+				case bbStack.Last() == "IF":
+					ensureVSpace = true
+				case bbStack.Last() == "CASE":
+					ensureVSpace = true
+				case bbStack.LastBlock() == "EXCEPTION":
+					ensureVSpace = true
+				}
+			}
+		}
+
+		// For code comments, labels, and other (DML) bags, defer to the
+		// original white-space.
+		switch {
+		case cTok.IsCodeComment(), cTok.IsLabel(), cTok.IsBag():
+			ensureVSpace = false
+			honorVSpace = true
+		case pTok.IsCodeComment(), pTok.IsLabel(), pTok.IsBag():
+			ensureVSpace = false
+			honorVSpace = true
+		}
+
+		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
+
+		////////////////////////////////////////////////////////////////
+		// Determine the indentation level
+		indents := baseIndents + parensDepth + bbStack.Indents()
+
+		if cTok.vSpace > 0 {
+			switch ctVal {
+			case "DECLARE", "BEGIN":
+				indents--
+			case "EXCEPTION":
+				indents -= 2
+			case "IF", "LOOP":
+				// WHILE/FOR vs. LOOP???
+				if pNcVal != "END" {
+					indents--
+				}
+			case "CASE":
+				if pNcVal != "END" {
+					indents -= 2
+				}
+			case "WHEN":
+				if bbStack.Last() == "CASE" {
+					indents--
+				}
+				if bbStack.LastBlock() == "EXCEPTION" {
+					indents--
+				}
+			case "ELSIF", "ELSEIF", "ELSE":
+				indents--
+			}
+
+			if bbStack.LastBlock() == "EXCEPTION" {
+				if pKwVal == "DIAGNOSTICS" && pNcVal == "," {
+					indents++
+				}
+			}
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Update the type and amount of white-space before the token
+		if cTok.vSpace > 0 {
+			cTok.AdjustIndents(indents)
+		} else {
+			cTok.AdjustHSpace(e, pTok)
+		}
+
+		////////////////////////////////////////////////////////////////
+		switch {
+		case cTok.IsBag():
+			if pNcVal == "IN" {
+				indents++
+			}
+			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents)
+			//case cTok.IsComment():
+			//	cTok = formatComment(e, cTok, indents)
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Adjust the parens depth
+		switch cTok.value {
+		case "(":
+			parensDepth++
+		case ")":
+			parensDepth--
+		}
+
+		// Set the various "previous token" values
+		pTok = cTok
+		if !cTok.IsCodeComment() {
+			pNcVal = ctVal
+		}
+		if cTok.IsKeyword() {
+			pKwVal = ctVal
+		}
+
+		tFormatted = append(tFormatted, cTok)
+	}
+
+	// Replace the mapped tokens with the newly formatted tokens
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
 }
 
 func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
@@ -421,14 +640,10 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 	objType := ""
 
 	var tFormatted []FmtToken
-	//var cTok FmtToken // The current token
 	var pTok FmtToken // The previous token
-	// var ctVal string  // The upper case value of the current token
 	var pNcVal string // The upper case value of the previous non-comment token
-	//var pKwVal string // The upper case value of the previous keyword token
 
 	// ucKw: The list of keywords that can be set to upper-case
-
 	var ucKw = []string{"AFTER", "AND", "AS", "BEFORE", "CALLED", "CONSTRAINT",
 		"COST", "CREATE", "CURRENT", "DEFAULT", "DEFERRABLE", "DEFERRED",
 		"DEFINER", "DELETE", "DO", "EACH", "EXECUTE", "EXTERNAL", "FOR",
@@ -471,11 +686,7 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 			case "LANGUAGE":
 			// nada
 			default:
-				//if objType == "TRIGGER" {
-				//	cTok.SetKeywordCase(e, ucTKw)
-				//} else {
 				cTok.SetKeywordCase(e, ucKw)
-				//}
 			}
 		}
 
@@ -570,9 +781,9 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 
 				switch sn {
 				case "TYPE", "NAME", "SIGNATURE", "SET", "AS":
-				//nada
-                case "BODY", "FINAL":
-                ensureVSpace = cTok.IsPLBag() || pTok.IsPLBag()
+					//nada
+				case "BODY", "FINAL":
+					ensureVSpace = cTok.IsPLBag() || pTok.IsPLBag()
 				default:
 					ensureVSpace = idx == 0
 				}
@@ -616,6 +827,10 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 					cTok.AdjustIndents(indents)
 				} else {
 					cTok.AdjustHSpace(e, pTok)
+				}
+
+				if cTok.IsBag() {
+					formatBag(e, bagMap, cTok.typeOf, cTok.id, cTok.indents)
 				}
 
 				// Set the various "previous token" values
