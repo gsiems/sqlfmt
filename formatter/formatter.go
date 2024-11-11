@@ -46,10 +46,10 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 	for _, bag := range bagMap {
 
 		if len(bag.warnings) > 0 {
-			warnings = append(warnings, bag.warnings)
+			warnings = append(warnings, bag.warnings...)
 		}
 		if len(bag.errors) > 0 {
-			errors = append(errors, bag.errors)
+			errors = append(errors, bag.errors...)
 		}
 
 		parensDepth := 0
@@ -80,7 +80,7 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 			}
 
 			if bag.forObj != "" {
-				errors = append(errors, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s for ", parensDepth, label, forObj))
+				errors = append(errors, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s for %s", parensDepth, label, bag.forObj))
 			} else {
 				errors = append(errors, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s", parensDepth, label))
 			}
