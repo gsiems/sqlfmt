@@ -126,3 +126,25 @@ git add formatter/*.go dev_notes/
 
 git commit -m "Added formatting of the non-body portion of PostgreSQL functions and procedures."
 ```
+
+## Day 7
+
+Not formatting things.
+
+Given that formatting can be disabled for an entire input, what about inputs
+that only have a portion that should not be formatted? For example the
+plain-text data portion of a COPY command, or the body of a PL/perl, PL/python,
+PL/tcl, etc. function/procedure?
+
+Options:
+
+1. Cowardly refuse to format the entire input (same as setting a do-not-format
+directive). Probably safest approach. Would need to feedback warnings/errors
+such as "non formattable code found". Having a feedback mechanism could also be
+used to flag instances of unbalanced parens or, in the case of PL code,
+unmatched begin/end blocks (or if/then, case, loop blocks).
+
+2. Selectively format the input by separating the non-formattable portion of
+the input from the formattable and only formatting the formattable portion.
+This would be the nicest, provided it worked reliably and didn't mess up the
+non-formattable portion of the input.
