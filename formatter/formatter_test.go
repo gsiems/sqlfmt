@@ -261,7 +261,6 @@ func writeTagged(dir, d, fName string, m []FmtToken, bagMap map[string]TokenBag,
 	toks = append(toks, fmt.Sprintf("KeywordCase  %s", kcn))
 	toks = append(toks, fmt.Sprintf("IdentCase    %s", icn))
 	toks = append(toks, fmt.Sprintf("DatatypeCase %s", tcn))
-	toks = append(toks, "")
 
 	for _, t := range m {
 		toks = append(toks, fmt.Sprintf("                     %s", t.String()))
@@ -273,6 +272,16 @@ func writeTagged(dir, d, fName string, m []FmtToken, bagMap map[string]TokenBag,
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+
+	for _, key := range keys {
+		if len(bagMap[key].errors) > 0 {
+			toks = append(toks, "ERRORS:")
+			for _, t := range bagMap[key].errors {
+				toks = append(toks, "    "+t)
+			}
+		}
+	}
+	toks = append(toks, "")
 
 	for _, key := range keys {
 
