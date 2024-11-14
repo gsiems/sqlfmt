@@ -60,22 +60,33 @@ func TestSQLFiles(t *testing.T) {
 			parsed, err = p.ParseStatements(input)
 			if err != nil {
 				t.Errorf("Error parsing input for %s (%s)", file.Name(), err)
+			}
+			var z []string
 
-				var z []string
-
-				for _, tc := range parsed {
-					if tc.vSpace > 0 {
-						z = append(z, strings.Repeat("\n", tc.vSpace))
-					}
-					if tc.hSpace != "" {
-						z = append(z, tc.hSpace)
-					}
-					z = append(z, tc.Value())
+			for _, tc := range parsed {
+				if tc.vSpace > 0 {
+					z = append(z, strings.Repeat("\n", tc.vSpace))
 				}
+				if tc.hSpace != "" {
+					z = append(z, tc.hSpace)
+				}
+				z = append(z, tc.Value())
+			}
 
-				err := writeReconstructed(parsedDir, d, file.Name(), strings.Join(z, ""))
-				if err != nil {
-					t.Errorf("Error writing reconstructed for %s: %s", file.Name(), err)
+			reconsFile := path.Join(parsedDir, "actual", d, file.Name()+".reconstructed")
+
+			err = writeReconstructed(reconsFile, strings.Join(z, ""))
+			if err != nil {
+				t.Errorf("Error writing reconstructed for %s: %s", file.Name(), err)
+			}
+
+			reconsBytes, err := ioutil.ReadFile(reconsFile)
+			if err != nil {
+				t.Errorf("Error reading reconstructed for %s: %s", file.Name(), err)
+			} else {
+				if strings.Compare(strings.TrimRight(string(inBytes), "\n\r\t "),
+					strings.TrimRight(string(reconsBytes), "\n\r\t ")) != 0 {
+					t.Errorf("Input vs reconstructed failed for %q", file.Name())
 				}
 			}
 
@@ -89,11 +100,31 @@ func TestSQLFiles(t *testing.T) {
 	}
 }
 
-func writeReconstructed(dir, d, fName, reconstructed string) error {
+func compareFiles(dir, d, fName string) error {
 
-	outFile := path.Join(dir, "actual", d, fName+".reconstructed")
+	actFile := path.Join(dir, "actual", d, fName)
+	expFile := path.Join(dir, "expected", d, fName)
 
-	f, err := os.OpenFile(outFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	actBytes, err := ioutil.ReadFile(actFile)
+	if err != nil {
+		return err
+	}
+
+	expBytes, err := ioutil.ReadFile(expFile)
+	if err != nil {
+		return err
+	}
+
+	if strings.Compare(string(actBytes), string(expBytes)) != 0 {
+		return fmt.Errorf("Actual vs expected failed for %q", fName)
+	}
+
+	return err
+}
+
+func writeReconstructed(reconsFile, reconstructed string) error {
+
+	f, err := os.OpenFile(reconsFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}

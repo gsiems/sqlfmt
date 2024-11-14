@@ -57,6 +57,8 @@ const (
 
 	Punctuation
 	End
+	// Data is non-parsed data payloads (e.g. plain-text data portion of COPY from pg_dump)
+	Data
 )
 
 // Token provides a single token with type information
@@ -188,6 +190,9 @@ func (t *Token) SetType(tt int) error {
 		End:
 		t.typeOf = tt
 		t.categoryOf = Keyword
+	case Data:
+		t.typeOf = tt
+		t.categoryOf = Data
 	default:
 		return errors.New("Not a valid token type")
 	}
@@ -229,6 +234,7 @@ func (t *Token) name(i int) string {
 		String:           "String",
 		Punctuation:      "Punctuation",
 		End:              "End",
+		Data:             "Data",
 	}
 
 	if name, ok := names[i]; ok {

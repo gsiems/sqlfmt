@@ -2,6 +2,7 @@ package parser
 
 import (
 	"errors"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -32,13 +33,17 @@ func NewParser(dName string) *Parser {
 // the SQL being submitted is used to better tokenize the submitted string.
 func (p *Parser) ParseStatements(input string) ([]Token, error) {
 
-	parsed := p.tokenizeStatement(input)
-	_, err := p.validateParsed(input, parsed)
+	parsed, err := p.tokenizeStatement(input)
 	if err != nil {
-		var toks []Token
-		return toks, err
+		return parsed, err
 	}
-	return parsed, nil
+	_, err = p.validateParsed(input, parsed)
+	//if err != nil {
+	//	//var toks []Token
+	//	//return toks, err
+	//	return parsed, err
+	//}
+	return parsed, err
 }
 
 // validateParsed compares the input with the results of reconstructing the
@@ -65,10 +70,68 @@ func (p *Parser) validateParsed(input string, parsed []Token) (bool, error) {
 	return passed, err
 }
 
-// tokenizeStatement is primarily about resolving those tokens that are either
+func (p *Parser) tokenizeStatement(stmts string) ([]Token, error) {
+
+	var tlRe []Token
+	var err error
+
+	switch p.dbdialect.Dialect() {
+	case dialect.PostgreSQL:
+
+		// If the input is for PostgreSQL then find any "COPY ... FROM stdin;"
+		// commands and store the data as single tokens as they don't require,
+		// and would probably get corrupted by, any further parsing.
+		cpDS := regexp.MustCompile(`\)\s+FROM\s+stdin\s*;`)
+		cpDE := regexp.MustCompile(`[\r\n]+\\.`)
+		remainder := stmts
+		for len(remainder) > 0 {
+
+			sm := cpDS.FindStringIndex(remainder)
+			em := cpDE.FindStringIndex(remainder)
+
+			fromIdx := 0
+			toIdx := 0
+
+			if sm != nil {
+				fromIdx = sm[1]
+			}
+			if em != nil {
+				toIdx = em[1]
+			}
+
+			if fromIdx > 0 && toIdx > 0 && toIdx > fromIdx {
+
+				tlRe = append(tlRe, p.tokenizeChunk(remainder[:fromIdx])...)
+
+				nt, err := NewToken(string(remainder[fromIdx:toIdx]), Data)
+				if err != nil {
+					return tlRe, err
+				}
+
+				tlRe = append(tlRe, nt)
+
+				remainder = remainder[toIdx:]
+
+			} else {
+
+				if len(remainder) > 0 {
+					tlRe = append(tlRe, p.tokenizeChunk(remainder)...)
+				}
+				remainder = ""
+			}
+		}
+
+	default:
+		tlRe = p.tokenizeChunk(stmts)
+	}
+
+	return tlRe, err
+}
+
+// tokenizeChunk is primarily about resolving those tokens that are either
 // delimited by standard start/end character strings (like comments and
 // comment blocks), are white-space, or are stand-alone punctuation.
-func (p *Parser) tokenizeStatement(stmts string) []Token {
+func (p *Parser) tokenizeChunk(stmts string) []Token {
 
 	var tlRe []Token
 
