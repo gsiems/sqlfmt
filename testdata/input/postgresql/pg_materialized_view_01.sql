@@ -1,7 +1,5 @@
 -- sqlfmt d:postgres
 
--- sqlfmt d:postgres
-
 GRANT TEMPORARY ON DATABASE app_db TO app_owner ;
 
 CREATE OR REPLACE FUNCTION app_data.refresh_mv()
