@@ -229,6 +229,7 @@ func nameOf(i int) string {
 		parser.String:           "String",
 		parser.Punctuation:      "Punctuation",
 		parser.End:              "End",
+		parser.Data:             "Data",
 
 		// Token bag types/categories
 		DNFBag:     "DNFBag",
