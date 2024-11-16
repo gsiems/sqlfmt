@@ -436,6 +436,11 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 			cTok.SetKeywordCase(e, []string{ctVal})
 		}
 
+		switch ctVal {
+		case "IS", "DISTINCT":
+			cTok.SetKeywordCase(e, []string{ctVal})
+		}
+
 		////////////////////////////////////////////////////////////////
 		// Update the block/branch stack
 		switch ctVal {
