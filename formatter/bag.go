@@ -28,7 +28,7 @@ func bagKey(bagType, bagId int) string {
 	/* Additionally, pad the bagId, bagType so that things sort consistently
 	when doing development testing (the padding isn't needed otherwise) */
 
-	return fmt.Sprintf("%08d.%03d'", bagId, bagType)
+	return fmt.Sprintf("%08d.%03d", bagId, bagType)
 }
 
 // tagSimple is used for tagging "simple" commands that start with a consistent
