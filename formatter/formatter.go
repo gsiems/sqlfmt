@@ -95,8 +95,6 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 	dbdialect := dialect.NewDialect(e.DialectName())
 
-	identCase := e.IdentCase()
-	dtCase := e.DatatypeCase()
 	foldingCase := dbdialect.CaseFolding()
 	var pKwVal string // The upper case value of the previous keyword token
 
