@@ -247,14 +247,8 @@ func writeTagged(dir, d, fName string, m []FmtToken, bagMap map[string]TokenBag,
 	dc := e.CaseFolding()
 	dcn, _ := foldNames[dc]
 
-	ic := e.IdentCase()
-	icn, _ := foldNames[ic]
-
 	kc := e.KeywordCase()
 	kcn, _ := foldNames[kc]
-
-	tc := e.KeywordCase()
-	tcn, _ := foldNames[tc]
 
 	fn := e.InputFile()
 
@@ -263,8 +257,6 @@ func writeTagged(dir, d, fName string, m []FmtToken, bagMap map[string]TokenBag,
 	toks = append(toks, fmt.Sprintf("Dialect      %s", dn))
 	toks = append(toks, fmt.Sprintf("FoldingCase  %s", dcn))
 	toks = append(toks, fmt.Sprintf("KeywordCase  %s", kcn))
-	toks = append(toks, fmt.Sprintf("IdentCase    %s", icn))
-	toks = append(toks, fmt.Sprintf("DatatypeCase %s", tcn))
 
 	for _, t := range m {
 		toks = append(toks, fmt.Sprintf("                     %s", t.String()))

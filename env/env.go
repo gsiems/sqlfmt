@@ -18,8 +18,6 @@ const (
 
 type Env struct {
 	keywordCase     int    // Indicates whether to upper-case, lower-case, or leave keywords
-	identCase       int    // Indicates whether to upper-case, lower-case, or leave identifiers
-	dtCase          int    // Indicates whether to upper-case, lower-case, or leave data types (want to treat separate from keywords)
 	indentString    string // The character string used for indentation
 	inputFile       string // The file to read from
 	outputFile      string // The file to write to
@@ -35,8 +33,6 @@ func NewEnv() *Env {
 	var e Env
 
 	e.keywordCase = DefaultCase
-	e.identCase = DefaultCase
-	e.dtCase = DefaultCase
 	e.indentString = "    " // 4 spaces
 	e.inputFile = "-"
 	e.outputFile = "-"
@@ -55,10 +51,6 @@ func (e *Env) SetString(k, v string) {
 		e.SetDialect(v)
 	case "keywordcase", "kwc":
 		e.SetKeywordCase(v)
-	case "identcase", "idc":
-		e.SetIdentCase(v)
-	case "datatypecase", "dtc":
-		e.SetDatatypeCase(v)
 	case "input", "if":
 		e.SetInputFile(v)
 	case "output", "of":
@@ -88,6 +80,10 @@ func (e *Env) SetBool(k string, v bool) {
 	case "enableformatting":
 		e.formatCode = true
 	}
+}
+
+func (e *Env) FormatCode() bool {
+	return e.formatCode
 }
 
 // Preserve Quoting ////////////////////////////////////////////////////
@@ -204,66 +200,6 @@ func (e *Env) SetKeywordCase(v string) {
 	}
 }
 
-//// Identifier Case
-
-func (e *Env) IdentCase() int {
-	switch e.identCase {
-	case DefaultCase:
-		switch e.CaseFolding() {
-		case dialect.FoldLower, dialect.FoldUpper:
-			return LowerCase
-		default:
-			return NoCase
-		}
-	}
-	return e.identCase
-}
-
-func (e *Env) SetIdentCase(v string) {
-	c := StrToCase(v)
-	switch c {
-	case DefaultCase:
-		switch e.CaseFolding() {
-		case dialect.FoldLower, dialect.FoldUpper:
-			e.keywordCase = LowerCase
-		default:
-			e.keywordCase = NoCase
-		}
-	default:
-		e.keywordCase = c
-	}
-}
-
-//// Identifier Case
-
-func (e *Env) DatatypeCase() int {
-	switch e.dtCase {
-	case DefaultCase:
-		switch e.CaseFolding() {
-		case dialect.FoldLower, dialect.FoldUpper:
-			return LowerCase
-		default:
-			return NoCase
-		}
-	}
-	return e.dtCase
-}
-
-func (e *Env) SetDatatypeCase(v string) {
-	c := StrToCase(v)
-	switch c {
-	case DefaultCase:
-		switch e.CaseFolding() {
-		case dialect.FoldLower, dialect.FoldUpper:
-			e.dtCase = LowerCase
-		default:
-			e.dtCase = NoCase
-		}
-	default:
-		e.dtCase = c
-	}
-}
-
 // Line Length /////////////////////////////////////////////////////////
 
 //// Minimum Line Length
@@ -335,7 +271,24 @@ func (e *Env) SetDirectives(v string) {
 
 	for i := 0; i < len(args); i++ {
 		kv := strings.SplitN(args[i], ":", 2)
-		if len(kv) > 1 {
+
+		switch len(kv) {
+		case 1:
+			k := strings.Trim(kv[0], " \t")
+
+			switch strings.ToLower(k) {
+			case "preservequoting":
+				e.preserveQuoting = true
+			case "linewrapping", "wraplonglines", "wrapping":
+				e.SetWrapLongLines(true)
+			case "disableformatting", "donotformat", "noformatting":
+				e.formatCode = false
+			case "enableformatting":
+				e.formatCode = true
+			}
+
+		case 2:
+
 			k := strings.Trim(kv[0], " \t")
 			v := strings.Trim(kv[1], " \t")
 
@@ -344,10 +297,6 @@ func (e *Env) SetDirectives(v string) {
 				e.SetDialect(v)
 			case "keywordcase", "kwc":
 				e.SetKeywordCase(v)
-			case "datatypecase", "dtc":
-				e.SetDatatypeCase(v)
-			case "identcase", "idc":
-				e.SetIdentCase(v)
 			case "input", "if":
 				e.SetInputFile(v)
 			case "output", "of":
@@ -366,22 +315,18 @@ func (e *Env) SetDirectives(v string) {
 				}
 			case "preservequoting":
 				switch strings.ToLower(v) {
-				case "on", "true", "t":
-					e.preserveQuoting = true
-				default:
+				case "off", "false", "f":
 					e.preserveQuoting = false
+				default:
+					e.preserveQuoting = true
 				}
 			case "linewrapping", "wraplonglines", "wrapping":
 				switch strings.ToLower(v) {
-				case "on", "true", "t":
-					e.SetWrapLongLines(true)
-				default:
+				case "off", "false", "f":
 					e.SetWrapLongLines(false)
+				default:
+					e.SetWrapLongLines(true)
 				}
-			case "disableformatting":
-				e.formatCode = false
-			case "enableformatting":
-				e.formatCode = true
 			}
 		}
 	}
