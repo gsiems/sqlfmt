@@ -10,16 +10,15 @@ import (
 )
 
 type FmtToken struct {
-	id            int    // the ID of the token
-	categoryOf    int    // the category of token
-	typeOf        int    // the type of token
-	vSpace        int    // the count of line-feeds (vertical space) preceding the token
-	commentVSpace int    // the count of line-feeds (vertical space) preceding the token due to comments
-	indents       int    // the count of indentations preceding the token
-	hSpace        string // the non-indentation horizontal white-space preceding the token
-	value         string // the non-white-space text of the token
-	vSpaceOrig    int    // the original preceding vertical white-space value as parsed
-	hSpaceOrig    string // the original preceding horizontal white-space value as parsed
+	id         int    // the ID of the token
+	categoryOf int    // the category of token
+	typeOf     int    // the type of token
+	vSpace     int    // the count of line-feeds (vertical space) preceding the token
+	indents    int    // the count of indentations preceding the token
+	hSpace     string // the non-indentation horizontal white-space preceding the token
+	value      string // the non-white-space text of the token
+	vSpaceOrig int    // the original preceding vertical white-space value as parsed
+	hSpaceOrig string // the original preceding horizontal white-space value as parsed
 }
 
 // AsUpper returns the token value as upper-case, mostly for comparison purposes
@@ -29,7 +28,7 @@ func (t *FmtToken) AsUpper() string {
 
 func (t *FmtToken) IsBag() bool {
 	switch t.typeOf {
-	case DNFBag, DCLBag, DDLBag, DMLBag, PLxBag, PLxBody, CommentBag:
+	case DNFBag, DCLBag, DDLBag, DMLBag, PLxBag, PLxBody, CommentOnBag:
 		return true
 	}
 	return false
@@ -232,13 +231,13 @@ func nameOf(i int) string {
 		parser.Data:             "Data",
 
 		// Token bag types/categories
-		DNFBag:     "DNFBag",
-		DCLBag:     "DCLBag",
-		DDLBag:     "DDLBag",
-		DMLBag:     "DMLBag",
-		PLxBag:     "PLxBag",
-		PLxBody:    "PLxBody",
-		CommentBag: "CommentBag",
+		DNFBag:       "DNFBag",
+		DCLBag:       "DCLBag",
+		DDLBag:       "DDLBag",
+		DMLBag:       "DMLBag",
+		PLxBag:       "PLxBag",
+		PLxBody:      "PLxBody",
+		CommentOnBag: "CommentOnBag",
 	}
 
 	if tName, ok := names[i]; ok {
@@ -253,7 +252,7 @@ func (t *FmtToken) String() string {
 	cName := nameOf(t.categoryOf)
 	tName := nameOf(t.typeOf)
 
-	return fmt.Sprintf("%6d %-12s: %-12s (%2d, %2d, %2d) (%2d %2d %2d) [%s]",
-		t.id, cName, tName, t.vSpace+t.commentVSpace, t.indents, len(t.hSpace),
-		t.vSpaceOrig, t.commentVSpace, len(t.hSpaceOrig), t.value)
+	return fmt.Sprintf("%6d %-12s: %-12s (%2d, %2d, %2d) (%2d %2d) [%s]",
+		t.id, cName, tName, t.vSpace, t.indents, len(t.hSpace),
+		t.vSpaceOrig, len(t.hSpaceOrig), t.value)
 }

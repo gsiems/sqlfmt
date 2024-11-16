@@ -135,7 +135,7 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 				bagType = DCLBag
 			case "COMMENT":
 				bagCat = DDLBag
-				bagType = CommentBag
+				bagType = CommentOnBag
 				forObj = cmdKwd
 			}
 

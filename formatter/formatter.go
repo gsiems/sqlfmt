@@ -18,14 +18,14 @@ const (
 	DMLBag                  // A bag of DML tokens
 	PLxBag                  // a bag of function/procedure/package tokens
 	PLxBody                 // A bag of function/procedure/package body tokens
-	CommentBag              // A bag of "COMMENT ON ..." tokens
+	CommentOnBag            // A bag of "COMMENT ON ..." tokens
 )
 
 func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 
 	bagMap := make(map[string]TokenBag)
 
-	remainder := tagComment(e, m, bagMap)
+	remainder := tagCommentOn(e, m, bagMap)
 	remainder = tagDCL(e, remainder, bagMap)
 	remainder = tagDML(e, remainder, bagMap)
 
@@ -67,7 +67,7 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 
 			label := ""
 			switch bag.typeOf {
-			case CommentBag: // should really never, ever, ever happen unless there was some fat-fingering going on
+			case CommentOnBag: // should really never, ever, ever happen unless there was some fat-fingering going on
 				label = "COMMENT ON statement"
 			case DCLBag:
 				label = "DCL statement"
@@ -211,8 +211,8 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 		switch {
 		case cTok.IsBag():
 			formatBag(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
-		//case cTok.IsComment():
-		//	cTok = formatComment(e, cTok, parensDepth)
+		//case cTok.IsCodeComment():
+		//	cTok = formatCodeComment(e, cTok, parensDepth)
 		default:
 			switch cTok.value {
 			case "(":
