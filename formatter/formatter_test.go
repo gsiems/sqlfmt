@@ -73,6 +73,10 @@ func TestSQLFiles(t *testing.T) {
 				e.SetDirectives(l1)
 			}
 
+			if !e.FormatCode() {
+				continue
+			}
+
 			e.SetInputFile(inputFile)
 
 			p := parser.NewParser(d)
@@ -139,7 +143,7 @@ func TestSQLFiles(t *testing.T) {
 
 			////////////////////////////////////////////////////////////////////////
 			// Recombine the tokens and write the final output
-			fmtStatement := combineTokens(e, mainTokens, bagMap)
+			fmtStatement := combineTokens(e, fmtTokens, bagMap)
 
 			err = writeOutput(outputDir, d, file.Name(), fmtStatement)
 			if err != nil {
