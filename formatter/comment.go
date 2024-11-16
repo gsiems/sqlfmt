@@ -2,6 +2,7 @@ package formatter
 
 import (
 	"github.com/gsiems/sqlfmt/env"
+	"github.com/gsiems/sqlfmt/parser"
 )
 
 // tagCommentOn ensures that "COMMENT ON ... IS ..." commands are properly tagged
@@ -15,15 +16,15 @@ func tagCommentOn(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtTok
 func formatCodeComment(e *env.Env, cTok FmtToken, baseIndents int) FmtToken {
 
 	rt := FmtToken{
-		id:            cTok.id,
-		categoryOf:    cTok.categoryOf,
-		typeOf:        cTok.typeOf,
-		vSpace:        cTok.vSpace,
-		indents:       cTok.indents,
-		hSpace:        cTok.hSpace,
-		value:         cTok.value,
-		vSpaceOrig:    cTok.vSpaceOrig,
-		hSpaceOrig:    cTok.hSpaceOrig,
+		id:         cTok.id,
+		categoryOf: cTok.categoryOf,
+		typeOf:     cTok.typeOf,
+		vSpace:     cTok.vSpace,
+		indents:    cTok.indents,
+		hSpace:     cTok.hSpace,
+		value:      cTok.value,
+		vSpaceOrig: cTok.vSpaceOrig,
+		hSpaceOrig: cTok.hSpaceOrig,
 	}
 
 	rt.HonorVSpace()
@@ -34,9 +35,9 @@ func formatCodeComment(e *env.Env, cTok FmtToken, baseIndents int) FmtToken {
 	}
 
 	switch rt.categoryOf {
-	case LineComment, PoundLineComment:
+	case parser.LineComment, parser.PoundLineComment:
 		// nada
-	case BlockComment:
+	case parser.BlockComment:
 
 		/* TODO:
 		 * For comments that have leading vertical space, determine the initial indent and compare it to the indents value.

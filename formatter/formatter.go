@@ -205,14 +205,15 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 
 	var mainTokens []FmtToken
 	parensDepth := 0
+	var pTok FmtToken // The previous token
 
 	for _, cTok := range m {
 
 		switch {
 		case cTok.IsBag():
 			formatBag(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
-		//case cTok.IsCodeComment():
-		//	cTok = formatCodeComment(e, cTok, parensDepth)
+		case cTok.IsCodeComment():
+			cTok = formatCodeComment(e, cTok, parensDepth)
 		default:
 			switch cTok.value {
 			case "(":
@@ -220,7 +221,13 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 			case ")":
 				parensDepth--
 			}
+			cTok.AdjustVSpace(false, true)
+			if cTok.vSpace == 0 {
+				cTok.AdjustHSpace(e, pTok)
+			}
 		}
+
+		pTok = cTok
 		mainTokens = append(mainTokens, cTok)
 	}
 
