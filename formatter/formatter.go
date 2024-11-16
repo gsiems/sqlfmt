@@ -243,10 +243,10 @@ func formatBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseI
 	if b, ok := bagMap[key]; ok {
 
 		switch b.typeOf {
-		//case DCLBag:
-		//	formatDCLBag(e, bagMap, b.typeOf, b.id, baseIndents)
-		//case DDLBag:
-		//	formatDDLBag(e, bagMap, b.typeOf, b.id, baseIndents)
+		case DCLBag:
+			formatDCLBag(e, bagMap, b.typeOf, b.id, baseIndents)
+		case DDLBag, CommentOnBag:
+			formatDDLBag(e, bagMap, b.typeOf, b.id, baseIndents)
 		//case DMLBag:
 		//	formatDMLBag(e, bagMap, b.typeOf, b.id, baseIndents)
 		case PLxBag, PLxBody:
