@@ -12,13 +12,13 @@ import (
 const (
 	////////////////////////////////////////////////////////////////////
 	// Token Bag Categories and types
-	DNFBag     = iota + 400 // A bag of Do-Not-Format tokens (Postgres Pl/Perl, PL/Python, PL/Tcl, COPY, etc.)
-	DCLBag                  // A bag of DCL tokens
-	DDLBag                  // A bag of DDL tokens
-	DMLBag                  // A bag of DML tokens
-	PLxBag                  // a bag of function/procedure/package tokens
-	PLxBody                 // A bag of function/procedure/package body tokens
-	CommentOnBag            // A bag of "COMMENT ON ..." tokens
+	DNFBag       = iota + 400 // A bag of Do-Not-Format tokens (Postgres Pl/Perl, PL/Python, PL/Tcl, COPY, etc.)
+	DCLBag                    // A bag of DCL tokens
+	DDLBag                    // A bag of DDL tokens
+	DMLBag                    // A bag of DML tokens
+	PLxBag                    // a bag of function/procedure/package tokens
+	PLxBody                   // A bag of function/procedure/package body tokens
+	CommentOnBag              // A bag of "COMMENT ON ..." tokens
 )
 
 func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
@@ -29,14 +29,15 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 	remainder = tagDCL(e, remainder, bagMap)
 	remainder = tagDML(e, remainder, bagMap)
 
+	// TODO: for now at least. need to revisit once other DBs (especially
+	// Oracle) are better sorted
 	switch e.Dialect() {
 	case dialect.PostgreSQL:
-		// TODO: for now at least. need to revisit once other DBs (especially
-		// Oracle) are better sorted
-
 		remainder = tagPLx(e, remainder, bagMap)
-		//remainder = tagDDL(e, remainder, bagMap)
-
+	case dialect.Oracle:
+	// nada
+	default:
+		remainder = tagDDL(e, remainder, bagMap)
 	}
 
 	// Check for warnings and errors
@@ -90,7 +91,7 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 	return bagMap, remainder
 }
 
-func cleanupParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
+func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 	dbdialect := dialect.NewDialect(e.DialectName())
 
@@ -166,20 +167,10 @@ func cleanupParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 			case "LANGUAGE":
 			// nada
 			default:
-				switch identCase {
-				case env.UpperCase:
-					tText = strings.ToUpper(tText)
-				case env.LowerCase:
-					tText = strings.ToLower(tText)
-				}
-			}
-		case parser.Datatype:
-			switch dtCase {
-			case env.UpperCase:
-				tText = strings.ToUpper(tText)
-			case env.LowerCase:
 				tText = strings.ToLower(tText)
 			}
+		case parser.Datatype, parser.Keyword:
+			tText = strings.ToLower(tText)
 		}
 
 		cleaned = append(cleaned, FmtToken{

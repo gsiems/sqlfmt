@@ -92,7 +92,7 @@ func TestSQLFiles(t *testing.T) {
 
 			////////////////////////////////////////////////////////////////////////
 			// "Clean" the tokens and compare to expected
-			cleaned := cleanupParsed(e, parsed)
+			cleaned := prepParsed(e, parsed)
 
 			err = writeCleaned(cleanedDir, d, file.Name(), cleaned, e)
 			if err != nil {
