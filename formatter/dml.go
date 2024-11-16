@@ -5,6 +5,78 @@ import (
 	"github.com/gsiems/sqlfmt/env"
 )
 
+type dmlFmtStat struct {
+	pd   int    // parens depth
+	pAct string // primary action (DML type)
+	cAct string // current action
+	stk  map[int]string
+}
+
+func newFmtStat() *dmlFmtStat {
+	var s dmlFmtStat
+	if s.stk == nil {
+		s.stk = make(map[int]string)
+	}
+	return &s
+}
+
+func (s *dmlFmtStat) parensDepth() int {
+	return s.pd
+}
+
+func (s *dmlFmtStat) incParensDepth() {
+	s.pd++
+}
+func (s *dmlFmtStat) decParensDepth() {
+	s.deleteClause()
+	s.pd--
+}
+
+func (s *dmlFmtStat) primaryAction() string {
+	return s.pAct
+}
+
+func (s *dmlFmtStat) currentAction() string {
+	return s.cAct
+}
+
+func (s *dmlFmtStat) updateClause(c string) {
+	s.stk[s.pd] = c
+
+	// update the current action within the DML
+	switch c {
+	case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT":
+		s.cAct = c
+	}
+
+	// update the primary action within the DML
+	switch c {
+	case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT",
+		"MERGE", "REFRESH", "REINDEX", "TRUNCATE", "WITH":
+
+		switch s.pAct {
+		case "", "WITH":
+			s.pAct = c
+		}
+
+	}
+}
+
+func (s *dmlFmtStat) currentClause() string {
+	for idx := s.pd; idx >= 0; idx-- {
+		if v, ok := s.stk[idx]; ok {
+			return v
+		}
+	}
+	return ""
+}
+
+func (s *dmlFmtStat) deleteClause() {
+	if _, ok := s.stk[s.pd]; ok {
+		delete(s.stk, s.pd)
+	}
+}
+
 func getBId(bagIds map[int]int, parensDepth int) int {
 
 	// Get the most current bag ID, if needed/available
@@ -150,8 +222,8 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		switch {
 		case canOpenBag:
 			switch ctVal {
-			case "DELETE", "INSERT", "MERGE", "SELECT", "UPDATE", "UPSERT",
-				"WITH":
+			case "DELETE", "INSERT", "MERGE", "SELECT", "TRUNCATE", "UPDATE",
+				"UPSERT", "WITH":
 				openBag = true
 			case "REFRESH":
 				// materialized view
@@ -262,4 +334,330 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	}
 
 	return remainder
+}
+
+func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+
+	key := bagKey(bagType, bagId)
+
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
+
+	cat := newFmtStat()
+	idxMax := len(b.tokens) - 1
+	onConflict := false
+
+	var tFormatted []FmtToken
+	var pTok FmtToken  // The previous token
+	var pNcVal string  // The upper case value of the previous non-comment token
+	var ppNcVal string // The upper case value of the previous to the previous non-comment token
+	var pKwVal string  // The upper case value of the previous keyword token
+
+	// ucKw: The list of keywords that can be set to upper-case
+	var ucKw = []string{"ALL", "AND", "ANY", "ARRAY", "AS", "ASC", "BETWEEN",
+		"BY", "CASCADE", "CASE", "COLLATE", "CONCURRENTLY", "CONFLICT",
+		"CONSTRAINT", "CROSS", "CURRENT", "DATA", "DEFAULT", "DELETE", "DESC",
+		"DISTINCT", "DO", "ELSE", "END", "EXCEPT", "EXISTS", "FETCH", "FIRST",
+		"FOR", "FROM", "FULL", "GROUP", "HAVING", "IDENTITY", "IN", "INNER",
+		"INSERT", "INTERSECT", "INTO", "IS", "JOIN", "LAST", "LATERAL", "LEFT",
+		"LIKE", "LIMIT", "MATCHED", "MATERIALIZED", "MERGE", "MINUS",
+		"NATURAL", "NEXT", "NFC", "NFD", "NFKC", "NFKD", "NO", "NORMALIZED",
+		"NOT", "NOTHING", "NOWAIT", "NULL", "NULLS", "OF", "OFFSET", "ON",
+		"ONLY", "OR", "ORDER", "OUTER", "OVER", "OVERRIDING", "PARTITION",
+		"RECURSIVE", "REFRESH", "REINDEX", "RESTART", "RETURNING", "RIGHT",
+		"ROW", "ROWS", "SELECT", "SET", "SHARE", "SOURCE", "SYSTEM", "TABLE",
+		"TARGET", "TEMP", "TEMPORARY", "THEN", "TRUNCATE", "UNION", "UNLOGGED",
+		"UPDATE", "UPSERT", "USING", "VALUE", "VALUES", "VIEW", "WHEN",
+		"WHERE", "WINDOW", "WITH", "WITHIN"}
+
+	//var ucPKw = []string{"RECURSIVE", "LOCAL", "CHECK", "OPTION", "CASCADED"}
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		cTok := b.tokens[idx]
+		ctVal := cTok.AsUpper()
+
+		// Update keyword capitalization as needed
+		// Identifiers should have been properly cased in cleanupParsed
+		if cTok.IsKeyword() {
+			cTok.SetKeywordCase(e, ucKw)
+		}
+
+		switch e.Dialect() {
+		case dialect.PostgreSQL:
+			switch ctVal {
+			case "RECURSIVE", "LOCAL", "CHECK", "OPTION", "CASCADED",
+				"SOURCE", "TARGET":
+				cTok.SetKeywordCase(e, []string{ctVal})
+			}
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Track the DML type and current clause
+		switch cat.parensDepth() {
+		case 0:
+
+			switch ctVal {
+			case "SELECT", "INSERT", "UPDATE", "UPSERT", "DELETE", "MERGE",
+				"REFRESH", "REINDEX", "TRUNCATE", "WITH":
+
+				cat.updateClause(ctVal)
+
+			case "FROM", "HAVING", "INTERSECT", "JOIN", "MINUS",
+				"ORDER", "RETURNING", "SET", "UNION", "VALUES", "WHERE":
+
+				cat.updateClause(ctVal)
+
+			case "CONFLICT":
+				onConflict = true
+
+				cat.updateClause(ctVal)
+
+			case "GROUP":
+				//switch pNcVal {
+				//case "WITHIN":
+				//default:
+				cat.updateClause(ctVal)
+				//}
+			}
+		default:
+			switch ctVal {
+			case "VALUES":
+				cat.updateClause(ctVal)
+			}
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Determine the preceding vertical spacing (if any)
+		honorVSpace := idx == 0
+		ensureVSpace := false
+
+		// get the next non-comment token...
+		//var nNcTok FmtToken
+		var nNcVal string
+
+		if idx+1 < idxMax {
+			for j := idx + 1; j <= idxMax; j++ {
+				if !b.tokens[j].IsCodeComment() {
+					//nNcTok = b.tokens[j]
+					nNcVal = b.tokens[j].AsUpper()
+					break
+				}
+			}
+		}
+
+		switch cat.parensDepth() {
+		case 0:
+			switch ctVal {
+			case "CROSS", "DELETE", "EXCEPT", "FULL", "HAVING", "INNER",
+				"INSERT", "INTERSECT", "LEFT", "LIMIT", "MERGE", "MINUS",
+				"NATURAL", "OFFSET", "ORDER", "REFRESH", "REINDEX",
+				"RETURNING", "RIGHT", "SELECT", "TRUNCATE", "UNION", "UPSERT",
+				"USING":
+
+				ensureVSpace = true
+
+			case "WHERE":
+				if !onConflict || pNcVal != ")" {
+					ensureVSpace = true
+				}
+
+			case "UPDATE":
+				switch pNcVal {
+				//case "DO":
+				case "FOR":
+					// nada
+				default:
+					ensureVSpace = true
+				}
+
+			case "FOR":
+				if nNcVal == "UPDATE" {
+					ensureVSpace = true
+				}
+
+			case "ON":
+				switch pNcVal {
+				case "CONFLICT":
+					// nada
+				default:
+					ensureVSpace = true
+				}
+
+			case "INTO":
+				switch {
+				case cat.currentClause() == "INSERT":
+					// nada
+				case cat.currentClause() == "RETURNING":
+					// nada
+				case pNcVal == "MERGE":
+					// nada
+
+				default:
+					ensureVSpace = true
+				}
+
+			case "WHEN":
+				if cat.primaryAction() == "MERGE" {
+					ensureVSpace = true
+				}
+
+			case "GROUP":
+				switch pNcVal {
+				case "WITHIN":
+					// nada
+				default:
+					ensureVSpace = true
+				}
+
+			case "WITH":
+				switch cat.primaryAction() {
+				case "WITH", "SELECT":
+					ensureVSpace = true
+				}
+
+			case "SET":
+				//switch cat.primaryAction() {
+				//    case "UPDATE", "CONFLICT":
+				ensureVSpace = true
+				//}
+
+			case "FROM":
+				switch {
+				case cat.primaryAction() == "DELETE":
+					// nada
+				case pNcVal == "DISTINCT":
+					// nada
+				default:
+					ensureVSpace = true
+				}
+
+			case "JOIN":
+				switch pNcVal {
+				case "LEFT", "RIGHT", "FULL", "CROSS", "LATERAL", "NATURAL", "INNER", "OUTER":
+					// nada
+				default:
+					ensureVSpace = true
+				}
+
+			case "OUTER":
+				switch e.Dialect() {
+				case dialect.MSSQL:
+
+					if nNcVal == "APPLY" {
+						ensureVSpace = true
+					}
+				}
+			}
+
+			switch pNcVal {
+			case ",":
+				if cTok.IsCodeComment() {
+					honorVSpace = true
+				} else {
+					ensureVSpace = true
+				}
+			}
+
+		case 1:
+			//switch ctVal {
+			//case ")":
+			//	if cat.primaryAction() == "WITH" {
+			//		ensureVSpace = true
+			//	}
+			//}
+
+			if cat.primaryAction() == "INSERT" {
+				if cat.currentClause() == "INSERT" {
+					switch pNcVal {
+					case ",", "(":
+						ensureVSpace = true
+					}
+				}
+			}
+		}
+
+		switch cat.currentClause() {
+		case "VALUES":
+			switch ctVal {
+			case "VALUES":
+				if pNcVal != "DEFAULT" {
+					ensureVSpace = true
+				}
+			case "(":
+				switch {
+				case cat.currentClause() == "CONFLICT":
+					// nada
+					//case pNcVal == "VALUES":
+					// nada
+
+				default:
+					//if cat.primaryAction() != "INSERT" {
+					ensureVSpace = true
+					//}
+				}
+			case ")":
+				if nNcVal == "AS" {
+					ensureVSpace = true
+				}
+			default:
+				if pNcVal == "," && ppNcVal == ")" {
+					ensureVSpace = true
+				}
+			}
+		case "WHERE", "JOIN":
+			switch ctVal {
+			case "OR":
+				ensureVSpace = true
+			case "AND":
+				if pKwVal != "BETWEEN" {
+					ensureVSpace = true
+				}
+			}
+		}
+
+		switch {
+		case cTok.IsCodeComment(), cTok.IsBag():
+			//ensureVSpace = false
+			honorVSpace = true
+		case pTok.IsCodeComment(), pTok.IsBag():
+			//ensureVSpace = false
+			honorVSpace = true
+		}
+
+		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
+
+		////////////////////////////////////////////////////////////////
+		// Determine, and apply, the indentation level
+
+		// TODO
+
+		////////////////////////////////////////////////////////////////
+		// Adjust the parens depth
+		switch ctVal {
+		case "(":
+			cat.incParensDepth()
+		case ")":
+			cat.decParensDepth()
+		}
+
+		// Set the various "previous token" values
+		pTok = cTok
+		if !cTok.IsCodeComment() {
+			ppNcVal = pNcVal
+			pNcVal = ctVal
+		}
+		if cTok.IsKeyword() {
+			pKwVal = ctVal
+		}
+
+		tFormatted = append(tFormatted, cTok)
+	}
+
+	// TODO: Wrap long lines
+
+	// Replace the mapped tokens with the newly formatted tokens
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
 }
