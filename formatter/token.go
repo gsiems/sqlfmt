@@ -194,10 +194,8 @@ func (t *FmtToken) SetKeywordCase(e *env.Env, kWords []string) {
 				return
 			}
 		}
-		t.SetLower()
-	case env.LowerCase:
-		t.SetLower()
 	}
+	t.SetLower()
 }
 
 func nameOf(i int) string {
