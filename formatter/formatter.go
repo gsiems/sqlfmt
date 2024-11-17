@@ -34,11 +34,8 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 	switch e.Dialect() {
 	case dialect.PostgreSQL:
 		remainder = tagPLx(e, remainder, bagMap)
-	case dialect.Oracle:
-	// nada
-	default:
-		remainder = tagDDL(e, remainder, bagMap)
 	}
+	remainder = tagDDL(e, remainder, bagMap)
 
 	// Check for warnings and errors
 	var warnings []string // list of (non-fatal) warnings found
@@ -96,8 +93,6 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 	dbdialect := dialect.NewDialect(e.DialectName())
 
 	foldingCase := dbdialect.CaseFolding()
-	var pKwVal string // The upper case value of the previous keyword token
-
 	// 1. Give each token a unique ID.
 	// 2. Review the tokens to unquote those identifiers as may be unquoted
 	// 3. Perform case folding of identifiers
@@ -160,14 +155,7 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 		}
 
 		switch tType {
-		case parser.Identifier:
-			switch pKwVal {
-			case "LANGUAGE":
-			// nada
-			default:
-				tText = strings.ToLower(tText)
-			}
-		case parser.Datatype, parser.Keyword:
+		case parser.Identifier, parser.Datatype, parser.Keyword:
 			tText = strings.ToLower(tText)
 		}
 
@@ -179,10 +167,6 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 			vSpaceOrig: cTok.VSpace(),
 			hSpaceOrig: cTok.HSpace(),
 		})
-
-		if tCategory == parser.Keyword {
-			pKwVal = strings.ToUpper(tText)
-		}
 	}
 
 	return cleaned
@@ -232,9 +216,11 @@ func formatBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseI
 	if b, ok := bagMap[key]; ok {
 
 		switch b.typeOf {
+		case CommentOnBag:
+			formatCommentOn(e, bagMap, b.typeOf, b.id, baseIndents)
 		case DCLBag:
 			formatDCLBag(e, bagMap, b.typeOf, b.id, baseIndents)
-		case DDLBag, CommentOnBag:
+		case DDLBag:
 			formatDDLBag(e, bagMap, b.typeOf, b.id, baseIndents)
 		case DMLBag:
 			formatDMLBag(e, bagMap, b.typeOf, b.id, baseIndents)

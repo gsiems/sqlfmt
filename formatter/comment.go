@@ -13,6 +13,92 @@ func tagCommentOn(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtTok
 	return remainder
 }
 
+func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+
+	key := bagKey(bagType, bagId)
+
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
+
+	idxMax := len(b.tokens) - 1
+	parensDepth := 0
+
+	var tFormatted []FmtToken
+	var pTok FmtToken // The previous token
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		cTok := b.tokens[idx]
+		ctVal := cTok.AsUpper()
+
+		////////////////////////////////////////////////////////////////
+		// Update keyword capitalization as needed
+		// Identifiers should have been properly cased in cleanupParsed
+		switch parensDepth {
+		case 0:
+			if cTok.IsKeyword() && !cTok.IsDatatype() {
+				cTok.SetKeywordCase(e, []string{ctVal})
+			}
+		default:
+			switch ctVal {
+			case "AS":
+				cTok.SetKeywordCase(e, []string{ctVal})
+			}
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Determine the preceding vertical spacing (if any)
+		honorVSpace := idx == 0
+		ensureVSpace := idx == 0
+
+		switch {
+		case cTok.IsCodeComment(), pTok.IsCodeComment():
+			honorVSpace = true
+		}
+
+		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
+
+		////////////////////////////////////////////////////////////////
+		// Determine the indentation level
+		indents := baseIndents + parensDepth
+
+		if idx > 0 && parensDepth == 0 {
+			indents++
+		}
+
+		if cTok.vSpace > 0 {
+			cTok.AdjustIndents(indents)
+		} else {
+			cTok.AdjustHSpace(e, pTok)
+		}
+
+		////////////////////////////////////////////////////////////////
+		switch {
+		case cTok.IsCodeComment():
+			cTok = formatCodeComment(e, cTok, indents)
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Adjust the parens depth
+		switch cTok.value {
+		case "(":
+			parensDepth++
+		case ")":
+			parensDepth--
+		}
+
+		// Set the various "previous token" values
+		pTok = cTok
+
+		tFormatted = append(tFormatted, cTok)
+	}
+
+	// Replace the mapped tokens with the newly formatted tokens
+	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, tFormatted)
+}
+
 func formatCodeComment(e *env.Env, cTok FmtToken, baseIndents int) FmtToken {
 
 	rt := FmtToken{
