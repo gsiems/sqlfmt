@@ -231,6 +231,14 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 			cTok.SetKeywordCase(e, []string{ctVal})
 		}
 
+		switch e.Dialect() {
+		case dialect.PostgreSQL:
+			switch ctVal {
+			case "IS", "NOT", "DISTINCT":
+				cTok.SetKeywordCase(e, []string{ctVal})
+			}
+		}
+
 		////////////////////////////////////////////////////////////////
 		// Determine the preceding vertical spacing (if any)
 		honorVSpace := true
