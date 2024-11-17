@@ -45,7 +45,7 @@ func (s *dmlFmtStat) updateClause(c string) {
 
 	// update the current action within the DML
 	switch c {
-	case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT":
+	case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT", "MERGE":
 		s.cAct = c
 	}
 
@@ -347,6 +347,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 
 	cat := newFmtStat()
 	idxMax := len(b.tokens) - 1
+	indents := baseIndents
 	onConflict := false
 
 	var tFormatted []FmtToken
@@ -356,9 +357,9 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 	var pKwVal string  // The upper case value of the previous keyword token
 
 	// ucKw: The list of keywords that can be set to upper-case
-	var ucKw = []string{"ALL", "AND", "ANY", "ARRAY", "AS", "ASC", "BETWEEN",
+	var ucKw = []string{"ALL", "AND", "ANY", "AS", "ASC", "BETWEEN",
 		"BY", "CASCADE", "CASE", "COLLATE", "CONCURRENTLY", "CONFLICT",
-		"CONSTRAINT", "CROSS", "CURRENT", "DATA", "DEFAULT", "DELETE", "DESC",
+		"CONSTRAINT", "CROSS", "CURRENT", "DATA", "DELETE", "DESC",
 		"DISTINCT", "DO", "ELSE", "END", "EXCEPT", "EXISTS", "FETCH", "FIRST",
 		"FOR", "FROM", "FULL", "GROUP", "HAVING", "IDENTITY", "IN", "INNER",
 		"INSERT", "INTERSECT", "INTO", "IS", "JOIN", "LAST", "LATERAL", "LEFT",
@@ -390,6 +391,11 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 			switch ctVal {
 			case "RECURSIVE", "LOCAL", "CHECK", "OPTION", "CASCADED",
 				"SOURCE", "TARGET":
+				cTok.SetKeywordCase(e, []string{ctVal})
+			}
+		case dialect.SQLite:
+			switch ctVal {
+			case "REPLACE":
 				cTok.SetKeywordCase(e, []string{ctVal})
 			}
 		}
@@ -458,6 +464,12 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 				"USING":
 
 				ensureVSpace = true
+
+			case "REPLACE":
+				switch e.Dialect() {
+				case dialect.SQLite:
+					ensureVSpace = true
+				}
 
 			case "WHERE":
 				if !onConflict || pNcVal != ")" {
@@ -554,21 +566,19 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 
 			switch pNcVal {
 			case ",":
-				if cTok.IsCodeComment() {
+				switch {
+
+				case cTok.IsCodeComment():
 					honorVSpace = true
-				} else {
+
+				case cat.primaryAction() == "TRUNCATE":
+
+				default:
 					ensureVSpace = true
 				}
 			}
 
 		case 1:
-			//switch ctVal {
-			//case ")":
-			//	if cat.primaryAction() == "WITH" {
-			//		ensureVSpace = true
-			//	}
-			//}
-
 			if cat.primaryAction() == "INSERT" {
 				if cat.currentClause() == "INSERT" {
 					switch pNcVal {
@@ -590,13 +600,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 				switch {
 				case cat.currentClause() == "CONFLICT":
 					// nada
-					//case pNcVal == "VALUES":
-					// nada
-
+				case e.Dialect() == dialect.Oracle:
+					// nada-- Oracle only allows one tuple per insert
 				default:
-					//if cat.primaryAction() != "INSERT" {
 					ensureVSpace = true
-					//}
 				}
 			case ")":
 				if nNcVal == "AS" {
@@ -631,8 +638,442 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 
 		////////////////////////////////////////////////////////////////
 		// Determine, and apply, the indentation level
+		localIndents := 0
 
-		// TODO
+		if cTok.vSpace > 0 {
+			indents = baseIndents + cat.parensDepth()
+
+			switch cat.primaryAction() {
+
+			case "WITH":
+				switch ctVal {
+				case "WITH":
+					// nada
+				case ")":
+					localIndents = -1
+					//default:
+					//	localIndents = 1
+				}
+			case "SELECT":
+				switch ctVal {
+				case "SELECT", "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
+					// nada
+				case "FROM", "WHERE", "GROUP", "HAVING", "WINDOW", "ORDER",
+					"OFFSET", "LIMIT", "FETCH", "FOR", "WITH":
+					localIndents = 1
+				case "CROSS", "FULL", "INNER", "JOIN", "LATERAL", "LEFT",
+					"NATURAL", "OUTER", "RIGHT":
+					localIndents = 1
+				case "VALUES":
+					localIndents = 1
+				case ")":
+					localIndents = 1
+				default:
+					switch {
+					case cTok.IsBag():
+						localIndents = 1
+					default:
+						localIndents = 2
+					}
+				}
+			case "INSERT":
+				switch cat.currentAction() {
+				case "SELECT":
+					switch ctVal {
+					case "SELECT", "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
+						localIndents = 1
+					case "FROM", "WHERE", "GROUP", "HAVING", "WINDOW", "ORDER",
+						"OFFSET", "LIMIT", "FETCH", "FOR", "WITH", "RETURNING":
+						localIndents = 2
+					case "CROSS", "FULL", "INNER", "JOIN", "LATERAL", "LEFT",
+						"NATURAL", "OUTER", "RIGHT":
+						localIndents = 2
+					case "VALUES":
+						localIndents = 2
+					case ")":
+						localIndents = 2
+					default:
+						switch {
+						case cTok.IsBag():
+							localIndents = 2
+						default:
+							localIndents = 3
+						}
+					}
+
+				default:
+					switch {
+					case onConflict:
+						switch ctVal {
+						case "UPDATE", "DELETE":
+							localIndents = 2
+						case "SET", "WHERE":
+							localIndents = 3
+						default:
+							localIndents = 4
+						}
+					default:
+						switch ctVal {
+						case "INSERT":
+							// nada
+						case "(":
+							localIndents = 2
+						default:
+							localIndents = 1
+						}
+					}
+				}
+			case "MERGE":
+				switch ctVal {
+				case "MERGE":
+					localIndents = 0
+				case "USING", "WHEN":
+					localIndents = 1
+				case "ON":
+					localIndents = 2
+				case "INSERT", "UPDATE", "DELETE":
+					localIndents = 2
+				case "SET", "VALUES", "RETURNING":
+					localIndents = 3
+				default:
+					localIndents = 4
+				}
+			case "DELETE":
+				switch ctVal {
+				case "DELETE":
+					localIndents = 0
+				case "USING", "WHERE", "RETURNING":
+					localIndents = 1
+				case "CROSS", "FULL", "INNER", "JOIN", "LATERAL", "LEFT",
+					"NATURAL", "OUTER", "RIGHT":
+					localIndents = 1
+				default:
+					localIndents = 2
+				}
+			case "UPDATE":
+				switch ctVal {
+				case "UPDATE":
+					localIndents = 0
+				case "SET", "FROM", "WHERE", "RETURNING":
+					localIndents = 1
+				case "CROSS", "FULL", "INNER", "JOIN", "LEFT", "NATURAL",
+					"OUTER", "RIGHT":
+					localIndents = 1
+				default:
+					localIndents = 2
+				}
+			case "REFRESH", "REINDEX", "TRUNCATE":
+				switch ctVal {
+				case cat.primaryAction():
+					localIndents = 0
+				default:
+					localIndents = 1
+				}
+
+				// UPSERT
+				/*
+					default:
+						switch ctVal {
+						case cat.primaryAction(), cat.currentAction():
+							//nada
+						case "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
+						// also nada
+						case "CROSS", "FROM", "FULL", "GROUP", "HAVING", "INNER", "JOIN",
+							"LEFT", "LIMIT", "NATURAL", "OFFSET", "OUTER", "RETURNING", "RIGHT", "SET",
+							"VALUES", "WHERE":
+
+							localIndents = 1
+
+						case "FOR", "LATERAL", "USING":
+							localIndents = 1
+
+						case "ORDER":
+							//if cat.parensDepth() == 0 {
+							localIndents = 1
+							//} else {
+							//	localIndents += 2
+							//}
+
+						case ")":
+							if cat.primaryAction() == "WITH" {
+								localIndents = -1
+							}
+							//    //else {
+						//	//	indents++
+						//	//}
+						//
+						//case "(":
+						//	if cat.primaryAction() == "VALUES" {
+						//		localIndents++
+						//	} else {
+						//		localIndents += 2
+						//	}
+
+						default:
+							switch {
+							case cat.primaryAction() == "WITH":
+								// nada
+							//case cat.primaryAction() == "INSERT":
+							//	indents++
+							case cTok.IsBag():
+								// nada
+							//case cTok.IsCodeComment():
+							//	// nada
+							//
+							//// for update
+							//
+							default:
+								localIndents = 2
+							}
+
+						}
+				*/
+			}
+
+			// cat.currentAction()
+			//switch cat.primaryAction() {
+
+			//case "INSERT":
+			//	switch ctVal {
+			//	case "INSERT":
+			//		localIndents = 0
+			//	case "VALUES":
+			//		localIndents = 1
+			//	default:
+			//		switch {
+			//		case onConflict:
+			//			// localIndents++
+			//			switch ctVal {
+			//			case "UPDATE", "DELETE":
+			//				localIndents = 2
+			//			case "SET", "WHERE":
+			//				localIndents = 3
+			//			default:
+			//				localIndents = 4
+			//			}
+			//
+			//		//case cat.currentAction() != cat.primaryAction():
+			//		//	localIndents = 1
+			//		case ctVal == "ON" && nNcVal == "CONFLICT":
+			//			localIndents = 1
+			//
+			//		case cat.parensDepth() > 0:
+			//			localIndents--
+			//		case cat.parensDepth() == 0:
+			//			localIndents++
+			//
+			//			//default:
+			//			//					localIndents = 3
+			//
+			//		}
+			//	}
+
+			//}
+
+			indents += localIndents
+
+		} // end cTok.vSpace > 0
+
+		if cTok.IsBag() {
+
+			switch {
+			case cat.primaryAction() == "WITH":
+				// nada
+			case cat.parensDepth() > 0:
+				indents++
+			}
+			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents)
+		}
+
+		/*
+			switch {
+			case cTok.IsBag():
+
+				switch {
+				case cat.primaryAction() == "INSERT":
+					localIndents--
+				default:
+					if cat.parensDepth() > 0 {
+						localIndents++
+					}
+				}
+
+				formatBag(e, bagMap, cTok.typeOf, cTok.id, indents+localIndents)
+
+			default:
+				if cTok.vSpace > 0 {
+
+					indents = baseIndents + cat.parensDepth()
+
+					// Base indentation rules
+					switch ctVal {
+					case cat.primaryAction():
+						//nada
+					case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT", "MERGE":
+					// nada
+					case "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
+					// also nada
+					case "CROSS", "FROM", "FULL", "GROUP", "HAVING", "INNER", "JOIN",
+						"LEFT", "LIMIT", "NATURAL", "OFFSET", "OUTER", "RETURNING", "RIGHT", "SET",
+						"VALUES", "WHERE":
+
+						indents++
+
+					case "FOR", "LATERAL", "USING":
+						indents++
+
+					case "ORDER":
+						if cat.parensDepth() == 0 {
+							indents++
+						} else {
+							indents += 2
+						}
+
+					case ")":
+						if cat.primaryAction() == "WITH" {
+							indents--
+						} else {
+							indents++
+						}
+
+					case "(":
+						if cat.primaryAction() == "VALUES" {
+							indents++
+						} else {
+							indents += 2
+						}
+
+					default:
+						switch {
+						case cat.primaryAction() == "WITH":
+							// nada
+						case cat.primaryAction() == "INSERT":
+							indents++
+						case cTok.IsBag():
+							// nada
+						case cTok.IsCodeComment():
+							// nada
+
+						// for update
+
+						default:
+							indents += 2
+						}
+					}
+
+					// Indentation tuning
+				}
+			}
+
+		*/
+		/*
+		           switch {
+		   		case cTok.IsCodeComment():
+
+		   			switch {
+		   			case primaryAction == "WITH":
+		   				if parensDepth > 0 {
+		   					localIndents++
+		   				}
+		   			}
+
+		   			cTok = formatComment(e, cTok, indents+localIndents)
+
+		   		case cTok.IsBag():
+
+		   			switch {
+		   			case primaryAction == "INSERT":
+		   				localIndents--
+		   			default:
+		   				if parensDepth > 0 {
+		   					localIndents++
+		   				}
+		   			}
+
+		   			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents+localIndents)
+
+		   		default:
+		   			if cTok.vSpace > 0 {
+
+		   				indents = baseIndents + parensDepth
+
+		   				// Base indentation rules
+		   				switch ctVal {
+		   				case primaryAction:
+		   					//nada
+		   				case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT", "MERGE":
+		   				// nada
+		   				case "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
+		   				// also nada
+
+		   				case "CROSS", "FROM", "FULL", "GROUP", "HAVING", "INNER", "JOIN",
+		   					"LEFT", "LIMIT", "NATURAL", "OFFSET", "OUTER", "RETURNING", "RIGHT", "SET",
+		   					"VALUES", "WHERE":
+
+		   					indents++
+
+		   				case "ORDER":
+		   					if parensDepth == 0 {
+		   						indents++
+		   					} else {
+		   						indents += 2
+		   					}
+
+		   				case ")":
+		   					if primaryAction == "WITH" {
+		   						indents--
+		   					} else {
+		   						indents++
+		   					}
+
+		   				default:
+		   					switch {
+		   					case primaryAction == "WITH":
+		   						// nada
+		   					case primaryAction == "INSERT":
+		   						indents++
+		   					case cTok.IsBag():
+		   						// nada
+		   					case cTok.IsCodeComment():
+		   						// nada
+		   					default:
+		   						indents += 2
+		   					}
+		   				}
+
+		   				// Indentation tuning
+
+		   			}
+		   		}
+		*/
+		////////////////////////////////////////////////////////////////
+		// Update the type and amount of white-space before the token
+		if cTok.vSpace > 0 {
+			cTok.AdjustIndents(indents)
+		} else {
+			cTok.AdjustHSpace(e, pTok)
+		}
+
+		if pTok.IsCodeComment() && !cTok.IsCodeComment() && ctVal != ")" {
+
+			// Loop back and re-set the indent of the previous comment lines.
+			// The idea here is that the desired indentation of a comment is
+			// more likely match the next line of non-comment code vs the
+			// previous line of non-comment code
+			//
+			// If the first previous comment already has a matching indent then
+			// no further action should be needed
+			for idx := 1; idx <= len(tFormatted); idx++ {
+
+				if tFormatted[len(tFormatted)-idx].indents == cTok.indents {
+					break
+				}
+				if !tFormatted[len(tFormatted)-idx].IsCodeComment() {
+					break
+				}
+				tFormatted[len(tFormatted)-idx].indents = cTok.indents
+			}
+		}
 
 		////////////////////////////////////////////////////////////////
 		// Adjust the parens depth
