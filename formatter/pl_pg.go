@@ -424,6 +424,15 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 	var pNcVal string // The upper case value of the previous non-comment token
 	var pKwVal string // The upper case value of the previous keyword token
 
+	// ucKw: The list of keywords that can be set to upper-case
+	var ucKw = []string{"AND", "ANY", "OR", "NOT", "IS", "NULL", "AS", "FOREACH",
+		"BEGIN", "BREAK", "CASE", "CLOSE", "CONTINUE", "DECLARE",
+		"DIAGNOSTICS", "DISTINCT", "ELSE", "ELSEIF", "ELSIF", "END", "EXECUTE",
+		"EXCEPTION", "EXIT", "FOR", "FROM", "GET", "IF", "IN", "IS", "LIKE",
+		"LOOP", "NEXT", "NOTICE", "OPEN", "QUERY", "RAISE", "RETURN", "SETOF",
+		"STACKED", "THEN", "WHEN", "WHILE", "SQLSTATE", "SQLERRM", "REFRESH",
+		"MATERIALIZED", "VIEW", "CONCURRENTLY", "WARNING", "ATOMIC"}
+
 	for idx := 0; idx <= idxMax; idx++ {
 
 		cTok := b.tokens[idx]
@@ -433,7 +442,7 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 		// Update keyword capitalization as needed
 		// Identifiers should have been properly cased in cleanupParsed
 		if cTok.IsKeyword() && !cTok.IsDatatype() {
-			cTok.SetKeywordCase(e, []string{ctVal})
+			cTok.SetKeywordCase(e, ucKw)
 		}
 
 		switch ctVal {
@@ -472,6 +481,14 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 			if pNcVal != "END" {
 				ensureVSpace = true
 			}
+
+		case "AND":
+			if pNcVal != "BETWEEN" {
+				ensureVSpace = true
+			}
+
+		case "OR":
+			ensureVSpace = true
 
 		case "LOOP":
 			if pNcVal != "END" {
@@ -686,18 +703,20 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 		// Update keyword capitalization as needed
 		// Identifiers should have been properly cased in cleanupParsed
 		if cTok.IsKeyword() {
-			// check for language
-			switch pNcVal {
-			case "LANGUAGE":
-			// nada
-			default:
-				cTok.SetKeywordCase(e, ucKw)
-			}
+			cTok.SetKeywordCase(e, ucKw)
 		}
-
 		switch ctVal {
 		case "DO", "SAFE", "UNSAFE":
-			cTok.SetKeywordCase(e, ucKw)
+			cTok.SetKeywordCase(e, []string{ctVal})
+		}
+
+		// check for language
+		switch pNcVal {
+		case "LANGUAGE":
+			switch ctVal {
+			case "SQL", "C":
+				cTok.SetUpper()
+			}
 		}
 
 		////////////////////////////////////////////////////////////////
