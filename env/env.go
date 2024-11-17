@@ -32,7 +32,7 @@ type Env struct {
 func NewEnv() *Env {
 	var e Env
 
-	e.keywordCase = DefaultCase
+	e.keywordCase = UpperCase
 	e.indentString = "    " // 4 spaces
 	e.inputFile = "-"
 	e.outputFile = "-"
