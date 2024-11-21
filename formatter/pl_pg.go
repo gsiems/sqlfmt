@@ -446,7 +446,7 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 		}
 
 		switch ctVal {
-		case "IS", "DISTINCT":
+		case "IS", "DISTINCT", "RAISE":
 			cTok.SetKeywordCase(e, []string{ctVal})
 		}
 
@@ -706,7 +706,7 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 			cTok.SetKeywordCase(e, ucKw)
 		}
 		switch ctVal {
-		case "DO", "SAFE", "UNSAFE":
+		case "DO", "SAFE", "UNSAFE", "IS", "DISTINCT":
 			cTok.SetKeywordCase(e, []string{ctVal})
 		}
 
