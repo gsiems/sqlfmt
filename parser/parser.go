@@ -63,9 +63,24 @@ func (p *Parser) validateParsed(input string, parsed []Token) (bool, error) {
 		z = append(z, tc.Value())
 	}
 
-	passed := strings.TrimRight(input, "\n\r\t ") == strings.TrimRight(strings.Join(z, ""), "\n\r\t ")
+	tInp := strings.TrimRight(input, "\n\r\t ")
+	tZed := strings.TrimRight(strings.Join(z, ""), "\n\r\t ")
+
+	passed := tInp == tZed
 	if !passed {
-		err = errors.New("Parsed input failed validation")
+
+		// Re-compare after having removed trailing white-space from the
+		// individual lines. Trailing whitespace isn't the kind of parse error
+		// that we are looking for or care about.
+		// There are also DOS vs Unix line endings (that we wish to ignore).
+		r := regexp.MustCompile("[ \t\r]+([\n])")
+		ttInp := r.ReplaceAllString(tInp, "$1")
+		ttZed := r.ReplaceAllString(tZed, "$1")
+
+		passed = ttInp == ttZed
+		if !passed {
+			err = errors.New("Parsed input failed validation")
+		}
 	}
 	return passed, err
 }
