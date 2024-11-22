@@ -88,6 +88,27 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 	return bagMap, remainder
 }
 
+
+
+
+func FormatInput(e *env.Env, input string) (string, error) {
+
+	p := parser.NewParser(e.DialectName())
+	parsed, err := p.ParseStatements(input)
+	if err != nil {
+		return "", err
+	}
+
+	cleaned := prepParsed(e, parsed)
+	bagMap, mainTokens := tagBags(e, cleaned)
+	fmtTokens := formatBags(e, mainTokens, bagMap)
+	fmtStatement := combineTokens(e, fmtTokens, bagMap)
+
+	return fmtStatement, nil
+}
+
+
+
 func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 	dbdialect := dialect.NewDialect(e.DialectName())
@@ -188,6 +209,18 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 		case cTok.IsCodeComment():
 			cTok = formatCodeComment(e, cTok, parensDepth)
 		default:
+			switch parensDepth {
+			case 0:
+				if cTok.IsKeyword() && !cTok.IsDatatype() {
+					cTok.SetKeywordCase(e, []string{cTok.AsUpper()})
+				}
+				//default:
+				//	switch ctVal {
+				//	case "AS":
+				//		cTok.SetKeywordCase(e, []string{ctVal})
+				//	}
+			}
+
 			switch cTok.value {
 			case "(":
 				parensDepth++
