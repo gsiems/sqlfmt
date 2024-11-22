@@ -203,7 +203,7 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				canOpenBag = true
 			case "BEGIN", "LOOP", "THEN", "ELSE", "IN", "AS":
 				canOpenBag = true
-			case "ATOMIC":
+			case "ATOMIC", "QUERY":
 				canOpenBag = e.Dialect() == dialect.PostgreSQL
 			case "/":
 				canOpenBag = e.Dialect() == dialect.Oracle
@@ -406,10 +406,18 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		case 0:
 
 			switch ctVal {
-			case "SELECT", "INSERT", "UPDATE", "UPSERT", "DELETE", "MERGE",
+			case "SELECT", "INSERT", "UPSERT", "DELETE", "MERGE",
 				"REFRESH", "REINDEX", "TRUNCATE", "WITH":
 
 				cat.updateClause(ctVal)
+
+			case "UPDATE":
+				switch pNcVal {
+				case "FOR":
+				// nada
+				default:
+					cat.updateClause(ctVal)
+				}
 
 			case "FROM", "HAVING", "INTERSECT", "JOIN", "MINUS",
 				"ORDER", "RETURNING", "SET", "UNION", "VALUES", "WHERE":
@@ -447,7 +455,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		if idx+1 < idxMax {
 			for j := idx + 1; j <= idxMax; j++ {
 				if !b.tokens[j].IsCodeComment() {
-					//nNcTok = b.tokens[j]
 					nNcVal = b.tokens[j].AsUpper()
 					break
 				}
@@ -457,6 +464,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		switch cat.parensDepth() {
 		case 0:
 			switch ctVal {
+			case cat.primaryAction():
+				ensureVSpace = true
+			case cat.currentAction():
+				ensureVSpace = true
 			case "CROSS", "DELETE", "EXCEPT", "FULL", "HAVING", "INNER",
 				"INSERT", "INTERSECT", "LEFT", "LIMIT", "MERGE", "MINUS",
 				"NATURAL", "OFFSET", "ORDER", "REFRESH", "REINDEX",
@@ -506,11 +517,19 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 					// nada
 				case pNcVal == "MERGE":
 					// nada
-
 				default:
-					ensureVSpace = true
+					switch e.Dialect() {
+					case dialect.SQLite:
+						switch ctVal {
+						case "REPLACE":
+						// nada
+						default:
+							ensureVSpace = true
+						}
+					default:
+						ensureVSpace = true
+					}
 				}
-
 			case "WHEN":
 				if cat.primaryAction() == "MERGE" {
 					ensureVSpace = true
@@ -557,7 +576,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 			case "OUTER":
 				switch e.Dialect() {
 				case dialect.MSSQL:
-
 					if nNcVal == "APPLY" {
 						ensureVSpace = true
 					}
@@ -567,12 +585,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 			switch pNcVal {
 			case ",":
 				switch {
-
 				case cTok.IsCodeComment():
 					honorVSpace = true
-
 				case cat.primaryAction() == "TRUNCATE":
-
+					// nada
 				default:
 					ensureVSpace = true
 				}
@@ -580,7 +596,13 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 
 		case 1:
 			if cat.primaryAction() == "INSERT" {
-				if cat.currentClause() == "INSERT" {
+				switch cat.currentClause() {
+				case "INSERT":
+					switch pNcVal {
+					case ",", "(":
+						ensureVSpace = true
+					}
+				case "VALUES":
 					switch pNcVal {
 					case ",", "(":
 						ensureVSpace = true
@@ -598,10 +620,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 				}
 			case "(":
 				switch {
-				case cat.currentClause() == "CONFLICT":
-					// nada
 				case e.Dialect() == dialect.Oracle:
 					// nada-- Oracle only allows one tuple per insert
+				case pNcVal == "VALUES":
+					// nada
 				default:
 					ensureVSpace = true
 				}
@@ -658,7 +680,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 				switch ctVal {
 				case "SELECT", "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
 					// nada
-				case "FROM", "WHERE", "GROUP", "HAVING", "WINDOW", "ORDER",
+				case "INTO", "FROM", "WHERE", "GROUP", "HAVING", "WINDOW", "ORDER",
 					"OFFSET", "LIMIT", "FETCH", "FOR", "WITH":
 					localIndents = 1
 				case "CROSS", "FULL", "INNER", "JOIN", "LATERAL", "LEFT",
@@ -770,105 +792,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 					localIndents = 1
 				}
 
-				// UPSERT
-				/*
-					default:
-						switch ctVal {
-						case cat.primaryAction(), cat.currentAction():
-							//nada
-						case "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
-						// also nada
-						case "CROSS", "FROM", "FULL", "GROUP", "HAVING", "INNER", "JOIN",
-							"LEFT", "LIMIT", "NATURAL", "OFFSET", "OUTER", "RETURNING", "RIGHT", "SET",
-							"VALUES", "WHERE":
-
-							localIndents = 1
-
-						case "FOR", "LATERAL", "USING":
-							localIndents = 1
-
-						case "ORDER":
-							//if cat.parensDepth() == 0 {
-							localIndents = 1
-							//} else {
-							//	localIndents += 2
-							//}
-
-						case ")":
-							if cat.primaryAction() == "WITH" {
-								localIndents = -1
-							}
-							//    //else {
-						//	//	indents++
-						//	//}
-						//
-						//case "(":
-						//	if cat.primaryAction() == "VALUES" {
-						//		localIndents++
-						//	} else {
-						//		localIndents += 2
-						//	}
-
-						default:
-							switch {
-							case cat.primaryAction() == "WITH":
-								// nada
-							//case cat.primaryAction() == "INSERT":
-							//	indents++
-							case cTok.IsBag():
-								// nada
-							//case cTok.IsCodeComment():
-							//	// nada
-							//
-							//// for update
-							//
-							default:
-								localIndents = 2
-							}
-
-						}
-				*/
 			}
-
-			// cat.currentAction()
-			//switch cat.primaryAction() {
-
-			//case "INSERT":
-			//	switch ctVal {
-			//	case "INSERT":
-			//		localIndents = 0
-			//	case "VALUES":
-			//		localIndents = 1
-			//	default:
-			//		switch {
-			//		case onConflict:
-			//			// localIndents++
-			//			switch ctVal {
-			//			case "UPDATE", "DELETE":
-			//				localIndents = 2
-			//			case "SET", "WHERE":
-			//				localIndents = 3
-			//			default:
-			//				localIndents = 4
-			//			}
-			//
-			//		//case cat.currentAction() != cat.primaryAction():
-			//		//	localIndents = 1
-			//		case ctVal == "ON" && nNcVal == "CONFLICT":
-			//			localIndents = 1
-			//
-			//		case cat.parensDepth() > 0:
-			//			localIndents--
-			//		case cat.parensDepth() == 0:
-			//			localIndents++
-			//
-			//			//default:
-			//			//					localIndents = 3
-			//
-			//		}
-			//	}
-
-			//}
 
 			indents += localIndents
 
@@ -885,167 +809,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents)
 		}
 
-		/*
-			switch {
-			case cTok.IsBag():
-
-				switch {
-				case cat.primaryAction() == "INSERT":
-					localIndents--
-				default:
-					if cat.parensDepth() > 0 {
-						localIndents++
-					}
-				}
-
-				formatBag(e, bagMap, cTok.typeOf, cTok.id, indents+localIndents)
-
-			default:
-				if cTok.vSpace > 0 {
-
-					indents = baseIndents + cat.parensDepth()
-
-					// Base indentation rules
-					switch ctVal {
-					case cat.primaryAction():
-						//nada
-					case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT", "MERGE":
-					// nada
-					case "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
-					// also nada
-					case "CROSS", "FROM", "FULL", "GROUP", "HAVING", "INNER", "JOIN",
-						"LEFT", "LIMIT", "NATURAL", "OFFSET", "OUTER", "RETURNING", "RIGHT", "SET",
-						"VALUES", "WHERE":
-
-						indents++
-
-					case "FOR", "LATERAL", "USING":
-						indents++
-
-					case "ORDER":
-						if cat.parensDepth() == 0 {
-							indents++
-						} else {
-							indents += 2
-						}
-
-					case ")":
-						if cat.primaryAction() == "WITH" {
-							indents--
-						} else {
-							indents++
-						}
-
-					case "(":
-						if cat.primaryAction() == "VALUES" {
-							indents++
-						} else {
-							indents += 2
-						}
-
-					default:
-						switch {
-						case cat.primaryAction() == "WITH":
-							// nada
-						case cat.primaryAction() == "INSERT":
-							indents++
-						case cTok.IsBag():
-							// nada
-						case cTok.IsCodeComment():
-							// nada
-
-						// for update
-
-						default:
-							indents += 2
-						}
-					}
-
-					// Indentation tuning
-				}
-			}
-
-		*/
-		/*
-		           switch {
-		   		case cTok.IsCodeComment():
-
-		   			switch {
-		   			case primaryAction == "WITH":
-		   				if parensDepth > 0 {
-		   					localIndents++
-		   				}
-		   			}
-
-		   			cTok = formatComment(e, cTok, indents+localIndents)
-
-		   		case cTok.IsBag():
-
-		   			switch {
-		   			case primaryAction == "INSERT":
-		   				localIndents--
-		   			default:
-		   				if parensDepth > 0 {
-		   					localIndents++
-		   				}
-		   			}
-
-		   			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents+localIndents)
-
-		   		default:
-		   			if cTok.vSpace > 0 {
-
-		   				indents = baseIndents + parensDepth
-
-		   				// Base indentation rules
-		   				switch ctVal {
-		   				case primaryAction:
-		   					//nada
-		   				case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT", "MERGE":
-		   				// nada
-		   				case "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
-		   				// also nada
-
-		   				case "CROSS", "FROM", "FULL", "GROUP", "HAVING", "INNER", "JOIN",
-		   					"LEFT", "LIMIT", "NATURAL", "OFFSET", "OUTER", "RETURNING", "RIGHT", "SET",
-		   					"VALUES", "WHERE":
-
-		   					indents++
-
-		   				case "ORDER":
-		   					if parensDepth == 0 {
-		   						indents++
-		   					} else {
-		   						indents += 2
-		   					}
-
-		   				case ")":
-		   					if primaryAction == "WITH" {
-		   						indents--
-		   					} else {
-		   						indents++
-		   					}
-
-		   				default:
-		   					switch {
-		   					case primaryAction == "WITH":
-		   						// nada
-		   					case primaryAction == "INSERT":
-		   						indents++
-		   					case cTok.IsBag():
-		   						// nada
-		   					case cTok.IsCodeComment():
-		   						// nada
-		   					default:
-		   						indents += 2
-		   					}
-		   				}
-
-		   				// Indentation tuning
-
-		   			}
-		   		}
-		*/
 		////////////////////////////////////////////////////////////////
 		// Update the type and amount of white-space before the token
 		if cTok.vSpace > 0 {
@@ -1097,7 +860,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	// TODO: Wrap long lines
+	// TODO: tFormatted = WrapLongLines(e, tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
