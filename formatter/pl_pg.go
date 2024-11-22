@@ -448,6 +448,10 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 		switch ctVal {
 		case "IS", "DISTINCT", "RAISE":
 			cTok.SetKeywordCase(e, []string{ctVal})
+		case "NOTICE", "WARNING", "EXCEPTION":
+			if pNcVal == "RAISE" {
+				cTok.SetKeywordCase(e, []string{ctVal})
+			}
 		}
 
 		////////////////////////////////////////////////////////////////
@@ -482,13 +486,14 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 				ensureVSpace = true
 			}
 
-		case "AND":
-			if pNcVal != "BETWEEN" {
-				ensureVSpace = true
-			}
-
-		case "OR":
-			ensureVSpace = true
+			// save these for line wrapping
+		//case "AND":
+		//	if pNcVal != "BETWEEN" {
+		//		ensureVSpace = true
+		//	}
+		//
+		//case "OR":
+		//	ensureVSpace = true
 
 		case "LOOP":
 			if pNcVal != "END" {
@@ -800,13 +805,13 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 
 				ctVal := cTok.AsUpper()
 
+				honorVSpace := idx == 0
 				ensureVSpace := false
-				honorVSpace := false
 
 				switch sn {
-				case "TYPE", "NAME", "SIGNATURE", "SET", "AS":
+				case "TYPE", "NAME", "SIGNATURE", "SET", "AS", "FINAL":
 					//nada
-				case "BODY", "FINAL":
+				case "BODY":
 					ensureVSpace = cTok.IsPLBag() || pTok.IsPLBag()
 				default:
 					ensureVSpace = idx == 0
@@ -867,6 +872,24 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 			}
 		}
 	}
+
+	// TODO: The following is a hack. Can't see why but sorting the non-body
+	// when there are parameters (in the input) after the body can cause line
+	// feeds to be added prior to the closing semi-colon. This hack deals with
+	// that unwanted extra vertical space but it would be better to understand
+	// why this is happening.
+	pTok = FmtToken{}
+	for idx, cTok := range tFormatted {
+		if cTok.value == ";" {
+			if !pTok.IsCodeComment() {
+				tFormatted[idx].vSpace = 0
+				tFormatted[idx].hSpace = " "
+			}
+		}
+		pTok = cTok
+	}
+
+	//TODO: tFormatted = WrapLongLines(e, tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
