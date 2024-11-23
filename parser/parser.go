@@ -74,8 +74,12 @@ func (p *Parser) validateParsed(input string, parsed []Token) (bool, error) {
 		// that we are looking for or care about.
 		// There are also DOS vs Unix line endings (that we wish to ignore).
 		r := regexp.MustCompile("[ \t\r]+([\n])")
+		r2 := regexp.MustCompile("([\n])\r")
 		ttInp := r.ReplaceAllString(tInp, "$1")
 		ttZed := r.ReplaceAllString(tZed, "$1")
+
+		ttInp = r2.ReplaceAllString(ttInp, "$1")
+		ttZed = r2.ReplaceAllString(ttZed, "$1")
 
 		passed = ttInp == ttZed
 		if !passed {
@@ -116,7 +120,12 @@ func (p *Parser) tokenizeStatement(stmts string) ([]Token, error) {
 
 			if fromIdx > 0 && toIdx > 0 && toIdx > fromIdx {
 
-				tlRe = append(tlRe, p.tokenizeChunk(remainder[:fromIdx])...)
+				ts, err := p.tokenizeChunk(remainder[:fromIdx])
+				if err != nil {
+					return tlRe, err
+				}
+
+				tlRe = append(tlRe, ts...)
 
 				nt, err := NewToken(string(remainder[fromIdx:toIdx]), Data)
 				if err != nil {
@@ -130,14 +139,20 @@ func (p *Parser) tokenizeStatement(stmts string) ([]Token, error) {
 			} else {
 
 				if len(remainder) > 0 {
-					tlRe = append(tlRe, p.tokenizeChunk(remainder)...)
+
+					ts, err := p.tokenizeChunk(remainder)
+					if err != nil {
+						return tlRe, err
+					}
+
+					tlRe = append(tlRe, ts...)
 				}
 				remainder = ""
 			}
 		}
 
 	default:
-		tlRe = p.tokenizeChunk(stmts)
+		tlRe, err = p.tokenizeChunk(stmts)
 	}
 
 	return tlRe, err
@@ -146,12 +161,12 @@ func (p *Parser) tokenizeStatement(stmts string) ([]Token, error) {
 // tokenizeChunk is primarily about resolving those tokens that are either
 // delimited by standard start/end character strings (like comments and
 // comment blocks), are white-space, or are stand-alone punctuation.
-func (p *Parser) tokenizeChunk(stmts string) []Token {
+func (p *Parser) tokenizeChunk(stmts string) ([]Token, error) {
 
 	var tlRe []Token
 
 	if stmts == "" {
-		return tlRe
+		return tlRe, nil
 	}
 
 	qiMax := len(stmts) - 1
@@ -180,8 +195,11 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 		case DoubleQuoted, SingleQuoted, BacktickQuoted, BracketQuoted:
 
 			if p.chkTokenEnd(chr, tType) {
-				if qi+1 > iStart {
-					nt, _ := NewToken(string(stmts[iStart:qi+1]), tType)
+				if qi+1 > iStart && qi+1 <= qiMax {
+					nt, err := NewToken(string(stmts[iStart:qi+1]), tType)
+					if err != nil {
+						return tlRe, err
+					}
 					tlRe = append(tlRe, nt)
 				}
 				iStart = qi + 1
@@ -191,14 +209,16 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 				} else {
 					tType = Other
 				}
-
 			}
 			continue
 
 		case BlockComment:
 			if p.chkTokenEnd(chr+chrNext, tType) {
-				if qi+2 > iStart {
-					nt, _ := NewToken(string(stmts[iStart:qi+2]), tType)
+				if qi+2 > iStart && qi+2 <= qiMax {
+					nt, err := NewToken(string(stmts[iStart:qi+2]), tType)
+					if err != nil {
+						return tlRe, err
+					}
 					tlRe = append(tlRe, nt)
 				}
 				iStart = qi + 2
@@ -214,7 +234,10 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 
 		case LineComment, PoundLineComment:
 			if chr == "\n" {
-				nt, _ := NewToken(string(stmts[iStart:qi]), tType)
+				nt, err := NewToken(string(stmts[iStart:qi]), tType)
+				if err != nil {
+					return tlRe, err
+				}
 				iStart = qi
 				tlRe = append(tlRe, nt)
 				tType = WhiteSpace
@@ -231,7 +254,10 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 			PoundLineComment:
 
 			if qi > iStart {
-				nt, _ := NewToken(string(stmts[iStart:qi]), tType)
+				nt, err := NewToken(string(stmts[iStart:qi]), tType)
+				if err != nil {
+					return tlRe, err
+				}
 				tlRe = append(tlRe, nt)
 				iStart = qi
 			}
@@ -244,30 +270,45 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 		case "(", ")", ",", ";":
 
 			if qi > iStart {
-				nt, _ := NewToken(string(stmts[iStart:qi]), tType)
+				nt, err := NewToken(string(stmts[iStart:qi]), tType)
+				if err != nil {
+					return tlRe, err
+				}
 				tlRe = append(tlRe, nt)
 			}
 
 			switch chr {
 			case "(":
-				nt, _ := NewToken(chr, OpenParen)
+				nt, err := NewToken(chr, OpenParen)
+				if err != nil {
+					return tlRe, err
+				}
 				tlRe = append(tlRe, nt)
 
 			case ")":
-				nt, _ := NewToken(chr, CloseParen)
+				nt, err := NewToken(chr, CloseParen)
+				if err != nil {
+					return tlRe, err
+				}
 				tlRe = append(tlRe, nt)
 
 			case ",":
-				nt, _ := NewToken(chr, Comma)
+				nt, err := NewToken(chr, Comma)
+				if err != nil {
+					return tlRe, err
+				}
 				tlRe = append(tlRe, nt)
 
 			case ";":
-				nt, _ := NewToken(chr, SemiColon)
+				nt, err := NewToken(chr, SemiColon)
+				if err != nil {
+					return tlRe, err
+				}
 				tlRe = append(tlRe, nt)
 			}
 
 			iStart = qi + 1
-			if iStart < qiMax && p.isWhiteSpaceChar(string(stmts[iStart])) {
+			if iStart <= qiMax && p.isWhiteSpaceChar(string(stmts[iStart])) {
 				tType = WhiteSpace
 			} else {
 				tType = Other
@@ -280,7 +321,10 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 		case WhiteSpace:
 			if !p.isWhiteSpaceChar(chr) {
 				if qi > iStart {
-					nt, _ := NewToken(string(stmts[iStart:qi]), tType)
+					nt, err := NewToken(string(stmts[iStart:qi]), tType)
+					if err != nil {
+						return tlRe, err
+					}
 					iStart = qi
 					tlRe = append(tlRe, nt)
 				}
@@ -292,7 +336,10 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 		if p.isWhiteSpaceChar(chr) {
 			if tType != WhiteSpace {
 				if qi > iStart {
-					nt, _ := NewToken(string(stmts[iStart:qi]), tType)
+					nt, err := NewToken(string(stmts[iStart:qi]), tType)
+					if err != nil {
+						return tlRe, err
+					}
 					tlRe = append(tlRe, nt)
 				}
 				iStart = qi
@@ -303,8 +350,11 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 
 		// Don't know (yet) what to do with it
 		if tType != Other {
-			if qi > iStart {
-				nt, _ := NewToken(string(stmts[iStart:qi]), tType)
+			if qi > iStart && iStart <= qiMax {
+				nt, err := NewToken(string(stmts[iStart]), tType)
+				if err != nil {
+					return tlRe, err
+				}
 				tlRe = append(tlRe, nt)
 			}
 			iStart = qi
@@ -312,7 +362,17 @@ func (p *Parser) tokenizeChunk(stmts string) []Token {
 		}
 	}
 
-	return p.updateTokenTypes(tlRe)
+	// Catch the final bits. Whether simply whites-space or some un-closed
+	// delimited thing
+	if qi > iStart && iStart <= qiMax {
+		nt, err := NewToken(string(stmts[iStart:]), tType)
+		if err != nil {
+			return tlRe, err
+		}
+		tlRe = append(tlRe, nt)
+	}
+
+	return p.updateTokenTypes(tlRe), nil
 }
 
 // updateTokenTypes takes the output of tokenizeStatement and attempts to
