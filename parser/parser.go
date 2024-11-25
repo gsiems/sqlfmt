@@ -100,7 +100,7 @@ func (p *Parser) tokenizeStatement(stmts string) ([]Token, error) {
 		// If the input is for PostgreSQL then find any "COPY ... FROM stdin;"
 		// commands and store the data as single tokens as they don't require,
 		// and would probably get corrupted by, any further parsing.
-		cpDS := regexp.MustCompile(`\)\s+FROM\s+stdin\s*;`)
+		cpDS := regexp.MustCompile(`(?i)COPY\s*[^\(]+\([^\)]+\)\s+FROM\s+stdin\s*;`)
 		cpDE := regexp.MustCompile(`[\r\n]+\\.`)
 		remainder := stmts
 		for len(remainder) > 0 {
