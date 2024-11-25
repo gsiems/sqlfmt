@@ -88,9 +88,6 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 	return bagMap, remainder
 }
 
-
-
-
 func FormatInput(e *env.Env, input string) (string, error) {
 
 	p := parser.NewParser(e.DialectName())
@@ -107,8 +104,6 @@ func FormatInput(e *env.Env, input string) (string, error) {
 	return fmtStatement, nil
 }
 
-
-
 func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 	dbdialect := dialect.NewDialect(e.DialectName())
@@ -116,10 +111,18 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 	foldingCase := dbdialect.CaseFolding()
 	// 1. Give each token a unique ID.
 	// 2. Review the tokens to unquote those identifiers as may be unquoted
-	// 3. Perform case folding of identifiers
-	// 4. Adjust the token type as needed
-	// 5. Adjust the max vertical space allowed
-	for id, cTok := range parsed {
+	// 3. Adjust the token type as needed
+	// 4. Perform case folding of identifiers, datatypes, and keywords as
+	//      specified in the env
+
+	idxMax := len(parsed) - 1
+
+
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		cTok := parsed[idx]
+
 
 		tText := cTok.Value()
 		tType := cTok.Type()
@@ -177,11 +180,26 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 		switch tType {
 		case parser.Identifier, parser.Datatype, parser.Keyword:
+
+			switch e.Dialect() {
+			case dialect.PostgreSQL:
+				// Check, and tweak the tokens, for arrays
+				if idx+2 < idxMax {
+					if parsed[idx+1].Value() == "[" && parsed[idx+2].Value() == "]" {
+						tText += "[]"
+						idx += 2
+						if tType == parser.Keyword {
+							tCategory = parser.Identifier
+							tType = parser.Identifier
+						}
+					}
+				}
+			}
 			tText = strings.ToLower(tText)
 		}
 
 		cleaned = append(cleaned, FmtToken{
-			id:         id,
+			id:         idx,
 			categoryOf: tCategory,
 			typeOf:     tType,
 			value:      tText,
