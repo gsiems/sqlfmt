@@ -198,3 +198,34 @@ func UpsertMappedBag(bagMap map[string]TokenBag, bagType, bagId int, forObj stri
 		tokens: tokens,
 	}
 }
+
+func WrapLongLines(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
+
+	var lines [][]FmtToken
+	var line []FmtToken
+	var ret []FmtToken
+
+	// Split the tokens into individual lines
+	for _, cTok := range tokens {
+		if cTok.vSpace > 0 {
+			if len(line) > 0 {
+				lines = append(lines, line)
+				line = nil
+			}
+		}
+		line = append(line, cTok)
+	}
+
+	if len(line) > 0 {
+		lines = append(lines, line)
+		line = nil
+	}
+
+	// TODO: wrap each line as needed
+
+	// Recombine the lines into a single token slice
+	for _, line := range lines {
+		ret = append(ret, line...)
+	}
+	return ret
+}
