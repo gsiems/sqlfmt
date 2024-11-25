@@ -5,6 +5,8 @@ import (
 	"github.com/gsiems/sqlfmt/env"
 )
 
+// Adding features does not necessarily increase functionality -- it just makes the manuals thicker.
+
 // tagDDL ensures that DDL commands (CREATE, ALTER, DROP) are properly tagged
 func tagDDL(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
@@ -31,10 +33,7 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	isInBag := false
 	bagId := 0
 	parensDepth := 0
-	ddlAction := ""
-	//forObj := ""
 
-	//pKwVal := ""      // The upper-case value of the previous keyword token
 	pNcVal := ""      // The upper-case value of the previous non-comment token
 	var pTok FmtToken // The previous token
 
@@ -51,51 +50,28 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		case true:
 			// Consider whether the bag should be closed.
 
-			/*
-			 * parens depth needs to be zero
-			 * if the DDL is for a PL unit then close can happen after the PLxBag
-			 * if the DDL is not for a PL unit then the closing ";"
-			 */
-
+			// * parens depth needs to be zero
+			// * if the DDL is for a PL unit then close can happen after the PLxBag
+			// * if the DDL is not for a PL unit then the closing ";"
+			addToBag = true
 			switch ctVal {
-			case "CREATE", "ALTER", "DROP":
-				closeBag = true
-				openBag = true
-				ddlAction = ctVal
-
-			default:
-				switch ddlAction {
-				case "DROP", "ALTER":
-
-					if ctVal == ";" {
-						closeBag = true
-						addToBag = true
-					}
-				case "CREATE":
-					// views, materialized views and PL units would already be bagged
-					switch {
-					case cTok.IsDMLBag(), cTok.IsPLBag():
-						closeBag = true
-						addToBag = true
-					case ctVal == ";":
-						closeBag = true
-						addToBag = true
-					}
+			case "(":
+				// NB we only care about the parens depth if we are in a bag
+				// so that when the parens depth goes negative then we know
+				// to exit the bag
+				parensDepth++
+			case ")":
+				parensDepth--
+				if parensDepth < 0 {
+					closeBag = true
+					addToBag = false
 				}
-
-				switch ctVal {
-				case "(":
-					// NB we only care about the parens depth if we are in a bag
-					// so that when the parens depth goes negative then we know
-					// to exit the bag
-					parensDepth++
-				case ")":
-					parensDepth--
-
-					if parensDepth < 0 {
-						closeBag = true
-					}
-
+			default:
+				switch {
+				case cTok.IsDMLBag(), cTok.IsPLBag():
+					closeBag = true
+				case ctVal == ";":
+					closeBag = true
 				}
 			}
 
@@ -119,14 +95,12 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			switch ctVal {
 			case "CREATE", "ALTER", "DROP":
 				openBag = true
-				ddlAction = ctVal
 			}
 		}
 
 		////////////////////////////////////////////////////////////////
 		// Actually process the token
 		switch {
-		//case isInBag && closeBag:
 		case isInBag && closeBag:
 
 			if addToBag {
@@ -140,11 +114,8 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			bagMap[key] = TokenBag{
 				id:     bagId,
 				typeOf: DDLBag,
-				//forObj: forObj,
 				tokens: bagTokens,
 			}
-
-			//forObj = ""
 
 			bagId = 0
 			bagTokens = nil
@@ -159,7 +130,8 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 			bagId = cTok.id
 			bagTokens = nil
-			bagTokens = []FmtToken{cTok}
+			//bagTokens = []FmtToken{cTok}
+			bagTokens = append(bagTokens, cTok)
 
 			// Add a token that has the pointer to the new bag
 			remainder = append(remainder, FmtToken{
@@ -184,9 +156,6 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		if !cTok.IsCodeComment() {
 			pNcVal = ctVal
 		}
-		//if cTok.IsKeyword() {
-		//	pKwVal = ctVal
-		//}
 	}
 
 	// On the off chance that the bag wasn't closed properly (incomplete or
@@ -216,25 +185,118 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 	idxMax := len(b.tokens) - 1
 	parensDepth := 0
 
+	ddlAction := ""
+	objType := ""
+	lineCount := 0
+
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
+
+	//var ucKw = []string{
+	//}
 
 	for idx := 0; idx <= idxMax; idx++ {
 
 		cTok := b.tokens[idx]
 		ctVal := cTok.AsUpper()
 
+		if ddlAction == "" {
+			switch ctVal {
+			case "CREATE", "ALTER", "DROP":
+				ddlAction = ctVal
+			}
+		}
+
+		switch objType {
+		case "":
+			switch ctVal {
+			case "AGGREGATE", "CAST", "COLLATION", "COLUMN", "CONSTRAINT",
+				"CONVERSION", "DATABASE", "DOMAIN", "EXTENSION", "FUNCTION",
+				"INDEX", "LANGUAGE", "POLICY", "PROCEDURE",
+				"PUBLICATION", "ROLE", "ROUTINE", "RULE", "SCHEMA", "SEQUENCE",
+				"SERVER", "STATISTICS", "SUBSCRIPTION", "TABLE", "TABLESPACE",
+				"TRIGGER", "TYPE", "VIEW":
+
+				objType = ctVal
+
+			case "ACCESS", "EVENT", "FOREIGN", "LARGE", "MATERIALIZED",
+				"OPERATOR", "TRANSFORM":
+
+				if idx < idxMax {
+					nTok := b.tokens[idx+1]
+					switch ctVal + " " + nTok.AsUpper() {
+
+					case "ACCESS METHOD", "EVENT TRIGGER", "FOREIGN TABLE",
+						"LARGE OBJECT", "MATERIALIZED VIEW", "OPERATOR CLASS",
+						"OPERATOR FAMILY", "TRANSFORM FOR":
+						objType = ctVal + " " + nTok.AsUpper()
+
+					case "FOREIGN DATA":
+						objType = "FOREIGN DATA WRAPPER"
+					}
+				}
+
+				if objType == "" && ctVal == "OPERATOR" {
+					objType = ctVal
+				}
+			}
+		}
+
 		////////////////////////////////////////////////////////////////
 		// Update keyword capitalization as needed
 		// Identifiers should have been properly cased in cleanupParsed
-		if cTok.IsKeyword() && !cTok.IsDatatype() {
+		//		if cTok.IsKeyword() && !cTok.IsDatatype() {
+		//			cTok.SetKeywordCase(e, []string{ctVal})
+		//		}
+
+		switch objType {
+		case "TABLE":
+			switch ctVal {
+			case "ALTER", "CASCADE", "CONSTRAINT", "CREATE",
+				"DEFAULT", "DROP", "FOREIGN", "INDEX", "KEY", "NULL", "ON",
+				"OWNER", "PRIMARY", "REFERENCES", "RESTRICT", "SET", "TABLE",
+				"TO", "UNIQUE", "UPDATE":
+				cTok.SetKeywordCase(e, []string{ctVal})
+			}
+
+		default:
+			switch parensDepth {
+			case 0:
+				if cTok.IsKeyword() && !cTok.IsDatatype() {
+					cTok.SetKeywordCase(e, []string{ctVal})
+				}
+			}
+
+			switch objType {
+			case "DATABASE":
+				switch ctVal {
+				case "ALTER", "CASCADE", "CREATE", "DATABASE", "DROP", "EXISTS",
+					"FORCE", "IF", "ON", "OWNER", "RENAME", "SET", "TO", "WITH":
+					cTok.SetKeywordCase(e, []string{ctVal})
+				}
+
+				switch e.Dialect() {
+				case dialect.PostgreSQL:
+					switch ctVal {
+					case "ALLOW_CONNECTIONS", "BUILTIN_LOCALE",
+						"COLLATION_VERSION", "ICU_LOCALE", "ICU_RULES",
+						"IS_TEMPLATE", "LC_COLLATE", "LC_CTYPE", "LOCALE",
+						"LOCALE_PROVIDER", "OID", "STRATEGY":
+						cTok.SetKeywordCase(e, []string{ctVal})
+					}
+				}
+			}
+		}
+
+		switch ctVal {
+		case "AND", "OR", "NOT":
 			cTok.SetKeywordCase(e, []string{ctVal})
 		}
 
 		switch e.Dialect() {
 		case dialect.PostgreSQL:
 			switch ctVal {
-			case "IS", "NOT", "DISTINCT":
+			case "IS", "DISTINCT":
 				cTok.SetKeywordCase(e, []string{ctVal})
 			}
 		}
@@ -251,6 +313,14 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		////////////////////////////////////////////////////////////////
 		// Determine the indentation level
 		indents := baseIndents + parensDepth
+
+		if idx > 0 && cTok.vSpace > 0 {
+			lineCount++
+		}
+
+		if lineCount > 0 {
+			indents++
+		}
 
 		if cTok.vSpace > 0 {
 			cTok.AdjustIndents(indents)
