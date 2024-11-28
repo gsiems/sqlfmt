@@ -321,14 +321,93 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		}
 	}
 
+	////////////////////////////////////////////////////////////////////
+	// Tag case structures
+	var ids []int
+	typMap := make(map[int]int) // map[bagID]BagType
+	for id, _ := range tokMap {
+		ids = append(ids, id)
+		typMap[id] = DMLBag
+	}
+
+	for _, baseBagId := range ids {
+
+		//bagTokens := tokMap[baseBagId]
+		caseIds := make(map[int]int) // map[caseDepth]bagId
+		caseDepth := 0
+		caseBagId := 0
+		var newBagTokens []FmtToken
+
+		for _, cTok := range tokMap[baseBagId] {
+
+			switch cTok.AsUpper() {
+			case "CASE":
+
+				nt := FmtToken{
+					id:         cTok.id,
+					categoryOf: DMLBag,
+					typeOf:     DMLCaseBag,
+					vSpace:     cTok.vSpace,
+					indents:    cTok.indents,
+					hSpace:     cTok.hSpace,
+					vSpaceOrig: cTok.vSpaceOrig,
+					hSpaceOrig: cTok.hSpaceOrig,
+				}
+
+				caseDepth++
+				switch {
+				case caseDepth == 1:
+					newBagTokens = append(newBagTokens, nt)
+				case caseDepth > 1:
+					tokMap[caseBagId] = append(tokMap[caseBagId], nt)
+				}
+
+				caseBagId = cTok.id
+				caseIds[caseDepth] = caseBagId
+				typMap[caseBagId] = DMLCaseBag
+				tokMap[caseBagId] = append(tokMap[caseBagId], cTok)
+
+			case "END":
+
+				tokMap[caseBagId] = append(tokMap[caseBagId], cTok)
+				if _, ok := bagIds[caseDepth]; ok {
+					delete(bagIds, caseDepth)
+				}
+				caseDepth--
+				caseBagId = caseIds[caseDepth]
+				if caseDepth <= 0 {
+					// Reset the bag IDs in case there are more CASE statements to tag
+					caseBagId = 0
+					caseDepth = 0
+					caseIds = nil
+					caseIds = make(map[int]int)
+				}
+
+			default:
+				if caseDepth > 0 {
+					tokMap[caseBagId] = append(tokMap[caseBagId], cTok)
+				} else {
+					newBagTokens = append(newBagTokens, cTok)
+				}
+			}
+		}
+		tokMap[baseBagId] = newBagTokens
+	}
+
+	////////////////////////////////////////////////////////////////////
 	// If the token map is not empty (DML was found and tagged) then populate
 	// the bagMap
 	for bagId, bagTokens := range tokMap {
 
-		key := bagKey(DMLBag, bagId)
+		typ := DMLBag
+		if t, ok := typMap[bagId]; ok {
+			typ = t
+		}
+
+		key := bagKey(typ, bagId)
 		bagMap[key] = TokenBag{
 			id:     bagId,
-			typeOf: DMLBag,
+			typeOf: typ,
 			tokens: bagTokens,
 		}
 	}

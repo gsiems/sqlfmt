@@ -16,6 +16,7 @@ const (
 	DCLBag                    // A bag of DCL tokens
 	DDLBag                    // A bag of DDL tokens
 	DMLBag                    // A bag of DML tokens
+	DMLCaseBag                // A bag of DML CASE statement tokens
 	PLxBag                    // a bag of function/procedure/package tokens
 	PLxBody                   // A bag of function/procedure/package body tokens
 	CommentOnBag              // A bag of "COMMENT ON ..." tokens
@@ -71,7 +72,7 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 				label = "DCL statement"
 			case DDLBag:
 				label = "DDL statement"
-			case DMLBag:
+			case DMLBag, DMLCaseBag:
 				label = "DML statement"
 			case PLxBag, PLxBody:
 				label = "PL code"
@@ -117,12 +118,9 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 	idxMax := len(parsed) - 1
 
-
-
 	for idx := 0; idx <= idxMax; idx++ {
 
 		cTok := parsed[idx]
-
 
 		tText := cTok.Value()
 		tType := cTok.Type()
@@ -273,7 +271,7 @@ func formatBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseI
 			formatDCLBag(e, bagMap, b.typeOf, b.id, baseIndents)
 		case DDLBag:
 			formatDDLBag(e, bagMap, b.typeOf, b.id, baseIndents)
-		case DMLBag:
+		case DMLBag, DMLCaseBag:
 			formatDMLBag(e, bagMap, b.typeOf, b.id, baseIndents)
 		case PLxBag, PLxBody:
 			formatPLxBag(e, bagMap, b.typeOf, b.id, baseIndents)

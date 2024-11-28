@@ -28,7 +28,7 @@ func (t *FmtToken) AsUpper() string {
 
 func (t *FmtToken) IsBag() bool {
 	switch t.typeOf {
-	case DNFBag, DCLBag, DDLBag, DMLBag, PLxBag, PLxBody, CommentOnBag:
+	case DNFBag, DCLBag, DDLBag, DMLBag, DMLCaseBag, PLxBag, PLxBody, CommentOnBag:
 		return true
 	}
 	return false
@@ -162,6 +162,14 @@ func (t *FmtToken) EnsureVSpace() {
 	}
 }
 
+func (t *FmtToken) SetVSpace(i int) {
+	t.vSpace = i
+}
+
+func (t *FmtToken) SetIndents(i int) {
+	t.indents = i
+}
+
 func (t *FmtToken) HonorVSpace() {
 	switch t.vSpaceOrig {
 	case 0, 1, 2:
@@ -233,6 +241,7 @@ func nameOf(i int) string {
 		DCLBag:       "DCLBag",
 		DDLBag:       "DDLBag",
 		DMLBag:       "DMLBag",
+		DMLCaseBag:   "DMLCaseBag",
 		PLxBag:       "PLxBag",
 		PLxBody:      "PLxBody",
 		CommentOnBag: "CommentOnBag",
