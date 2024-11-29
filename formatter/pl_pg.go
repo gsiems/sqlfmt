@@ -645,6 +645,8 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 		tFormatted = append(tFormatted, cTok)
 	}
 
+	//tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
+
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
 }
@@ -889,7 +891,7 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 		pTok = cTok
 	}
 
-	tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
+	//tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
