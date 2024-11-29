@@ -771,6 +771,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 					localIndents = 1
 				default:
 					switch {
+					case cat.currentAction() ==  "SELECT":
+						localIndents = 2
 					case cTok.IsBag():
 						localIndents = 1
 					default:
@@ -939,7 +941,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
+	//tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
