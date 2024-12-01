@@ -230,11 +230,6 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 				if cTok.IsKeyword() && !cTok.IsDatatype() {
 					cTok.SetKeywordCase(e, []string{cTok.AsUpper()})
 				}
-				//default:
-				//	switch ctVal {
-				//	case "AS":
-				//		cTok.SetKeywordCase(e, []string{ctVal})
-				//	}
 			}
 
 			switch cTok.value {
