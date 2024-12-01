@@ -78,10 +78,6 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		// Determine the indentation level
 		indents := baseIndents + parensDepth + nextIndents
 
-		if cTok.vSpace > 0 {
-			nextIndents = 1
-		}
-
 		////////////////////////////////////////////////////////////////
 		// Update the type and amount of white-space before the token
 		if cTok.vSpace > 0 {
