@@ -691,6 +691,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		}
 
 		switch cat.currentClause() {
+		case "WITH":
+			if ctVal == ")" {
+				ensureVSpace = true
+			}
 		case "VALUES":
 			switch ctVal {
 			case "VALUES":
@@ -771,7 +775,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 					localIndents = 1
 				default:
 					switch {
-					case cat.currentAction() ==  "SELECT":
+					case cat.currentAction() == "SELECT":
 						localIndents = 2
 					case cTok.IsBag():
 						localIndents = 1
