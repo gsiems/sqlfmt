@@ -250,6 +250,21 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 		mainTokens = append(mainTokens, cTok)
 	}
 
+	parensDepth = 0
+	for _, cTok := range mainTokens {
+		switch cTok.value {
+		case "(":
+			parensDepth++
+		case ")":
+			parensDepth--
+		default:
+			switch {
+			case cTok.IsBag():
+				AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
+			}
+		}
+	}
+
 	return mainTokens
 }
 
