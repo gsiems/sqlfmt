@@ -54,6 +54,13 @@ COMMENT ON TRIGGER my_trigger ON my_table IS 'Used for RI';
 COMMENT ON TYPE complex IS 'Complex number data type';
 COMMENT ON VIEW my_view IS 'View of departmental costs';
 
+COMMENT ON VIEW my_view IS -- some comment
+    'My view';
+
+COMMENT ON VIEW my_view /* another comment */ IS 'My view';
+
+COMMENT ON VIEW my_view
+    /* because comments are fun */ IS 'My view';
 
 /*
 COMMENT ON
