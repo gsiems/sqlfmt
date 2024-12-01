@@ -13,7 +13,7 @@ func tagCommentOn(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtTok
 	return remainder
 }
 
-func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
 

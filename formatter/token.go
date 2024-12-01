@@ -70,6 +70,10 @@ func (t *FmtToken) IsDMLBag() bool {
 	return false
 }
 
+func (t *FmtToken) IsDMLCaseBag() bool {
+	return t.typeOf == DMLCaseBag
+}
+
 func (t *FmtToken) AdjustIndents(i int) {
 	switch {
 	case i <= 0:

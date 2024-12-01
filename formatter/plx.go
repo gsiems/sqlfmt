@@ -17,12 +17,12 @@ func tagPLx(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	return m
 }
 
-func formatPLxBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+func formatPLxBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	switch e.Dialect() {
 	case dialect.PostgreSQL:
-		formatPgPL(e, bagMap, bagType, bagId, baseIndents)
+		formatPgPL(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
 	//case dialect.Oracle:
-	//	formatOraPL(e, bagMap, bagType, bagId, baseIndents)
+	//	formatOraPL(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
 	}
 }

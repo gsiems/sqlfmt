@@ -15,7 +15,7 @@ func tagDCL(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	return remainder
 }
 
-func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
 
@@ -89,7 +89,7 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		////////////////////////////////////////////////////////////////
 		switch {
 		case cTok.IsBag():
-			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents)
+			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
 		case cTok.IsCodeComment():
 			cTok = formatCodeComment(e, cTok, indents)
 		}

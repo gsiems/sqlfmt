@@ -221,7 +221,7 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 
 		switch {
 		case cTok.IsBag():
-			formatBag(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
+			formatBag(e, bagMap, cTok.typeOf, cTok.id, parensDepth, false)
 		case cTok.IsCodeComment():
 			cTok = formatCodeComment(e, cTok, parensDepth)
 		default:
@@ -251,7 +251,7 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 	return mainTokens
 }
 
-func formatBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+func formatBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	// remember that bagMap is a pointer to the map, not a copy of the map
 
@@ -261,15 +261,15 @@ func formatBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseI
 
 		switch b.typeOf {
 		case CommentOnBag:
-			formatCommentOn(e, bagMap, b.typeOf, b.id, baseIndents)
+			formatCommentOn(e, bagMap, b.typeOf, b.id, baseIndents, forceInitVSpace)
 		case DCLBag:
-			formatDCLBag(e, bagMap, b.typeOf, b.id, baseIndents)
+			formatDCLBag(e, bagMap, b.typeOf, b.id, baseIndents, forceInitVSpace)
 		case DDLBag:
-			formatDDLBag(e, bagMap, b.typeOf, b.id, baseIndents)
+			formatDDLBag(e, bagMap, b.typeOf, b.id, baseIndents, forceInitVSpace)
 		case DMLBag, DMLCaseBag:
-			formatDMLBag(e, bagMap, b.typeOf, b.id, baseIndents)
+			formatDMLBag(e, bagMap, b.typeOf, b.id, baseIndents, forceInitVSpace)
 		case PLxBag, PLxBody:
-			formatPLxBag(e, bagMap, b.typeOf, b.id, baseIndents)
+			formatPLxBag(e, bagMap, b.typeOf, b.id, baseIndents, forceInitVSpace)
 		case DNFBag:
 			// nada
 		}

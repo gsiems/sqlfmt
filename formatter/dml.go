@@ -415,7 +415,7 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	return remainder
 }
 
-func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
 
@@ -524,8 +524,13 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 
 		////////////////////////////////////////////////////////////////
 		// Determine the preceding vertical spacing (if any)
-		honorVSpace := idx == 0
+		honorVSpace := false
 		ensureVSpace := false
+
+		if idx == 0 {
+			honorVSpace = true
+			ensureVSpace = forceInitVSpace
+		}
 
 		// get the next non-comment token...
 		//var nNcTok FmtToken
@@ -543,6 +548,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 		switch cat.parensDepth() {
 		case 0:
 			switch ctVal {
+			case "":
+			// nada
 			case cat.primaryAction():
 				ensureVSpace = true
 			case cat.currentAction():
@@ -871,6 +878,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 				}
 			case "REFRESH", "REINDEX", "TRUNCATE":
 				switch ctVal {
+				case "":
+					localIndents = 1
 				case cat.primaryAction():
 					localIndents = 0
 				default:
@@ -883,15 +892,17 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, ba
 
 		} // end cTok.vSpace > 0
 
-		if cTok.IsBag() {
-
+		switch {
+		case cTok.IsDMLBag(), cTok.IsDMLCaseBag():
+			formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
+		case cTok.IsBag():
 			switch {
 			case cat.primaryAction() == "WITH":
 				// nada
 			case cat.parensDepth() > 0:
 				indents++
 			}
-			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents)
+			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
 		}
 
 		////////////////////////////////////////////////////////////////

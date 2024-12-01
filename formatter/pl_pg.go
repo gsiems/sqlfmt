@@ -326,12 +326,12 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	return remainder
 }
 
-func formatPgPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+func formatPgPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 	switch bagType {
 	case PLxBag:
-		formatPgPLNonBody(e, bagMap, bagType, bagId, baseIndents)
+		formatPgPLNonBody(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
 	case PLxBody:
-		formatPgPLBody(e, bagMap, bagType, bagId, baseIndents)
+		formatPgPLBody(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
 	}
 }
 
@@ -406,7 +406,7 @@ func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) str
 	return paramLabel
 }
 
-func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
 
@@ -619,7 +619,7 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 			if pNcVal == "IN" {
 				indents++
 			}
-			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents)
+			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
 			//case cTok.IsComment():
 			//	cTok = formatComment(e, cTok, indents)
 		}
@@ -651,7 +651,7 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, 
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
 }
 
-func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int, baseIndents int) {
+func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
 
@@ -861,7 +861,7 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId in
 				}
 
 				if cTok.IsBag() {
-					formatBag(e, bagMap, cTok.typeOf, cTok.id, cTok.indents)
+					formatBag(e, bagMap, cTok.typeOf, cTok.id, cTok.indents, ensureVSpace)
 				}
 
 				// Set the various "previous token" values
