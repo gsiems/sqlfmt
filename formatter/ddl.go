@@ -111,10 +111,13 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			isInBag = false
 
 			key := bagKey(DDLBag, bagId)
+			var lines [][]FmtToken
+			lines = append(lines, bagTokens)
+
 			bagMap[key] = TokenBag{
 				id:     bagId,
 				typeOf: DDLBag,
-				tokens: bagTokens,
+				lines:  lines,
 			}
 
 			bagId = 0
@@ -162,11 +165,14 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	// incorrect statement submitted?), ensure that no tokens are lost.
 	if len(bagTokens) > 0 {
 		key := bagKey(DDLBag, bagId)
+		var lines [][]FmtToken
+		lines = append(lines, bagTokens)
+
 		bagMap[key] = TokenBag{
 			id:     bagId,
 			typeOf: DDLBag,
 			//forObj: forObj,
-			tokens: bagTokens,
+			lines: lines,
 		}
 	}
 
@@ -182,7 +188,14 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
-	idxMax := len(b.tokens) - 1
+	if len(b.lines) == 0 {
+		return
+	}
+
+	line := b.lines[0]
+
+	idxMax := len(line) - 1
+
 	parensDepth := 0
 
 	ddlAction := ""
@@ -197,7 +210,7 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := b.tokens[idx]
+		cTok := line[idx]
 		ctVal := cTok.AsUpper()
 
 		if ddlAction == "" {
@@ -223,7 +236,7 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				"OPERATOR", "TRANSFORM":
 
 				if idx < idxMax {
-					nTok := b.tokens[idx+1]
+					nTok := line[idx+1]
 					switch ctVal + " " + nTok.AsUpper() {
 
 					case "ACCESS METHOD", "EVENT TRIGGER", "FOREIGN TABLE",
@@ -351,8 +364,22 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	//tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
+	var newLines [][]FmtToken
+	var newLine []FmtToken
+
+	for _, cTok := range tFormatted {
+		if cTok.vSpace > 0 {
+			if len(newLine) > 0 {
+				newLines = append(newLines, newLine)
+				newLine = nil
+			}
+		}
+		newLine = append(newLine, cTok)
+	}
+	if len(newLine) > 0 {
+		newLines = append(newLines, newLine)
+	}
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, tFormatted)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, newLines)
 }

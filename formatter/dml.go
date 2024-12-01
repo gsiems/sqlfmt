@@ -405,10 +405,13 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		}
 
 		key := bagKey(typ, bagId)
+		var lines [][]FmtToken
+		lines = append(lines, bagTokens)
+
 		bagMap[key] = TokenBag{
 			id:     bagId,
 			typeOf: typ,
-			tokens: bagTokens,
+			lines:  lines,
 		}
 	}
 
@@ -424,8 +427,14 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
+	if len(b.lines) == 0 {
+		return
+	}
+
+	line := b.lines[0]
+
 	cat := newFmtStat()
-	idxMax := len(b.tokens) - 1
+	idxMax := len(line) - 1
 	indents := baseIndents
 	onConflict := false
 
@@ -456,7 +465,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := b.tokens[idx]
+		cTok := line[idx]
 		ctVal := cTok.AsUpper()
 
 		// Update keyword capitalization as needed
@@ -538,8 +547,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 		if idx+1 < idxMax {
 			for j := idx + 1; j <= idxMax; j++ {
-				if !b.tokens[j].IsCodeComment() {
-					nNcVal = b.tokens[j].AsUpper()
+				if !line[j].IsCodeComment() {
+					nNcVal = line[j].AsUpper()
 					break
 				}
 			}
@@ -956,8 +965,22 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	//tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
+	var newLines [][]FmtToken
+	var newLine []FmtToken
+
+	for _, cTok := range tFormatted {
+		if cTok.vSpace > 0 {
+			if len(newLine) > 0 {
+				newLines = append(newLines, newLine)
+				newLine = nil
+			}
+		}
+		newLine = append(newLine, cTok)
+	}
+	if len(newLine) > 0 {
+		newLines = append(newLines, newLine)
+	}
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
 }

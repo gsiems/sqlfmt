@@ -53,12 +53,14 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 
 		parensDepth := 0
 
-		for _, t := range bag.tokens {
-			switch t.value {
-			case "(":
-				parensDepth++
-			case ")":
-				parensDepth--
+		for _, line := range bag.lines {
+			for _, t := range line {
+				switch t.value {
+				case "(":
+					parensDepth++
+				case ")":
+					parensDepth--
+				}
 			}
 		}
 
@@ -299,7 +301,10 @@ func untagBags(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 				tb, ok := bagMap[key]
 				if ok {
-					tl2 = append(tl2, tb.tokens...)
+					for _, line := range tb.lines {
+
+						tl2 = append(tl2, line...)
+					}
 					found = true
 				} else {
 					tl2 = append(tl2, cTok)

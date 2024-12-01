@@ -8,12 +8,12 @@ import (
 )
 
 type TokenBag struct {
-	id       int        // the ID for the bag
-	typeOf   int        // the type of token bag
-	forObj   string     // the name of the kind of object that the bag is for (not all bag types care)
-	tokens   []FmtToken // the list of tokens that make up the bag
-	warnings []string   // list of (non-fatal) warnings found
-	errors   []string   // list of (fatal) errors found
+	id       int          // the ID for the bag
+	typeOf   int          // the type of token bag
+	forObj   string       // the name of the kind of object that the bag is for (not all bag types care)
+	lines    [][]FmtToken // the lines of token lists that make up the bag
+	warnings []string     // list of (non-fatal) warnings found
+	errors   []string     // list of (fatal) errors found
 }
 
 func bagKey(bagType, bagId int) string {
@@ -102,6 +102,8 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 		switch {
 		case isInBag && closeBag:
 			bagTokens = append(bagTokens, cTok)
+			var lines [][]FmtToken
+			lines = append(lines, bagTokens)
 
 			// Close the bag
 			isInBag = false
@@ -111,7 +113,7 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 				id:     bagId,
 				typeOf: bagType,
 				forObj: forObj,
-				tokens: bagTokens,
+				lines:  lines,
 			}
 
 			forObj = ""
@@ -171,18 +173,21 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 	// incorrect statement submitted?), ensure that no tokens are lost.
 	if len(bagTokens) > 0 {
 		key := bagKey(bagType, bagId)
+		var lines [][]FmtToken
+		lines = append(lines, bagTokens)
+
 		bagMap[key] = TokenBag{
 			id:     bagId,
 			typeOf: bagType,
 			forObj: forObj,
-			tokens: bagTokens,
+			lines:  lines,
 		}
 	}
 
 	return remainder
 }
 
-func UpsertMappedBag(bagMap map[string]TokenBag, bagType, bagId int, forObj string, tokens []FmtToken) {
+func UpsertMappedBag(bagMap map[string]TokenBag, bagType, bagId int, forObj string, lines [][]FmtToken) {
 
 	key := bagKey(bagType, bagId)
 
@@ -195,7 +200,7 @@ func UpsertMappedBag(bagMap map[string]TokenBag, bagType, bagId int, forObj stri
 		id:     bagId,
 		typeOf: bagType,
 		forObj: forObj,
-		tokens: tokens,
+		lines:  lines,
 	}
 }
 

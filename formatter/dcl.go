@@ -24,11 +24,19 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
-	idxMax := len(b.tokens) - 1
-	nextIndents := 0
+	if len(b.lines) == 0 {
+		return
+	}
+
+	line := b.lines[0]
+
+	idxMax := len(line) - 1
 	parensDepth := 0
 
 	var tFormatted []FmtToken
+
+	nextIndents := 0
+
 	var pTok FmtToken // The previous token
 	var pNcVal string // The upper case value of the previous non-comment token
 
@@ -46,7 +54,7 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	for idx := 0; idx <= idxMax; idx++ {
 
 		// current token
-		cTok := b.tokens[idx]
+		cTok := line[idx]
 		ctVal := cTok.AsUpper()
 
 		// Update keyword capitalization as needed
@@ -112,8 +120,22 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	// TODO: Wrap long lines
+	var newLines [][]FmtToken
+	var newLine []FmtToken
+
+	for _, cTok := range tFormatted {
+		if cTok.vSpace > 0 {
+			if len(newLine) > 0 {
+				newLines = append(newLines, newLine)
+				newLine = nil
+			}
+		}
+		newLine = append(newLine, cTok)
+	}
+	if len(newLine) > 0 {
+		newLines = append(newLines, newLine)
+	}
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
 }

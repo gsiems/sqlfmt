@@ -316,10 +316,13 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		}
 
 		key := bagKey(typ, bagId)
+		var lines [][]FmtToken
+		lines = append(lines, bagTokens)
+
 		bagMap[key] = TokenBag{
 			id:     bagId,
 			typeOf: typ,
-			tokens: bagTokens,
+			lines:  lines,
 		}
 	}
 
@@ -415,7 +418,14 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		return
 	}
 
-	idxMax := len(b.tokens) - 1
+	if len(b.lines) == 0 {
+		return
+	}
+
+	line := b.lines[0]
+
+	idxMax := len(line) - 1
+
 	parensDepth := 0
 	var bbStack plStack
 
@@ -435,7 +445,7 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := b.tokens[idx]
+		cTok := line[idx]
 		ctVal := cTok.AsUpper()
 
 		////////////////////////////////////////////////////////////////
@@ -645,10 +655,24 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	//tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
+	var newLines [][]FmtToken
+	var newLine []FmtToken
+
+	for _, cTok := range tFormatted {
+		if cTok.vSpace > 0 {
+			if len(newLine) > 0 {
+				newLines = append(newLines, newLine)
+				newLine = nil
+			}
+		}
+		newLine = append(newLine, cTok)
+	}
+	if len(newLine) > 0 {
+		newLines = append(newLines, newLine)
+	}
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
 }
 
 func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
@@ -664,7 +688,14 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 	// DEFINER functions/procedures that do not set a search path or that have
 	// an insecure search path
 
-	idxMax := len(b.tokens) - 1
+	if len(b.lines) == 0 {
+		return
+	}
+
+	line := b.lines[0]
+
+	idxMax := len(line) - 1
+
 	parensDepth := 0
 	objType := ""
 
@@ -697,7 +728,7 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := b.tokens[idx]
+		cTok := line[idx]
 		ctVal := cTok.AsUpper()
 
 		switch ctVal {
@@ -744,8 +775,8 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 
 			if idx+1 < idxMax {
 				for j := idx + 1; j <= idxMax; j++ {
-					if !b.tokens[j].IsCodeComment() {
-						nNcTok = b.tokens[j]
+					if !line[j].IsCodeComment() {
+						nNcTok = line[j]
 						nNcIdx = j
 						break
 					}
@@ -756,8 +787,8 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 			nNcVal := ""
 			if nNcIdx < idxMax {
 				for j := nNcIdx + 1; j <= idxMax; j++ {
-					if !b.tokens[j].IsCodeComment() {
-						nNcVal = b.tokens[j].AsUpper()
+					if !line[j].IsCodeComment() {
+						nNcVal = line[j].AsUpper()
 						break
 					}
 				}
@@ -770,8 +801,8 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 			nNcVal := ""
 			if idx < idxMax {
 				for j := idx + 1; j <= idxMax; j++ {
-					if !b.tokens[j].IsCodeComment() {
-						nNcVal = b.tokens[j].AsUpper()
+					if !line[j].IsCodeComment() {
+						nNcVal = line[j].AsUpper()
 						break
 					}
 				}
@@ -891,10 +922,24 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 		pTok = cTok
 	}
 
-	//tFormatted = WrapLongLines(e, b.typeOf, tFormatted)
+	var newLines [][]FmtToken
+	var newLine []FmtToken
+
+	for _, cTok := range tFormatted {
+		if cTok.vSpace > 0 {
+			if len(newLine) > 0 {
+				newLines = append(newLines, newLine)
+				newLine = nil
+			}
+		}
+		newLine = append(newLine, cTok)
+	}
+	if len(newLine) > 0 {
+		newLines = append(newLines, newLine)
+	}
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
 }
 
 /*

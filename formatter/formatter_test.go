@@ -285,9 +285,11 @@ func writeTagged(dir, d, fName string, m []FmtToken, bagMap map[string]TokenBag,
 
 		bagId := bagMap[key].id
 		bagType := nameOf(bagMap[key].typeOf)
-		for _, t := range bagMap[key].tokens {
-			ts := t.String()
-			toks = append(toks, fmt.Sprintf("%6d %-12s: %s", bagId, bagType, ts))
+		for _, line := range bagMap[key].lines {
+			for _, t := range line {
+				ts := t.String()
+				toks = append(toks, fmt.Sprintf("%6d %-12s: %s", bagId, bagType, ts))
+			}
 		}
 	}
 
