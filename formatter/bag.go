@@ -302,16 +302,20 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 		}
 	}
 
+	wrapBools(e, bagMap, bagType, bagId, defIndents)
+	wrapPlCalls(e, bagMap, bagType, bagId, defIndents)
+
+	wrapComparisonOps(e, bagMap, bagType, bagId, defIndents)
+	wrapMathOps(e, bagMap, bagType, bagId, defIndents)
+	wrapCsvList(e, bagMap, bagType, bagId, defIndents)
+
 	for _, line := range b.lines {
 		if len(line) == 0 {
 			continue
 		}
 
 		parensDepth := 0
-		initIndents := line[0].indents
-		if initIndents == 0 {
-			initIndents = defIndents
-		}
+		initIndents := max(defIndents, line[0].indents)
 
 		switch line[0].AsUpper() {
 		case "SELECT":
@@ -324,15 +328,9 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 			case cTok.value == ")":
 				parensDepth--
 			case cTok.typeOf == DMLCaseBag:
-			// already done
+				// already done
 			case cTok.IsBag():
-
-				wrapBools(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth)
-				wrapPlCalls(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth)
-
-				wrapComparisonOps(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth)
-				wrapMathOps(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth)
-				wrapCsvList(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth)
+				AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth)
 			}
 		}
 	}
@@ -651,4 +649,144 @@ func wrapMathOps(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 
 func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
 
+	// Note that it is possible for a line to contain multiple PL calls
+	// and/or nested PL calls
+	// For example:
+	//
+	//   select coalesce ( func_01 ( ... ), func_02 ( ... ) ) ;
+	//
+	//   var := func_01 (
+	//           param_1 => 1,
+	//           param_2 => func_02 ( ... ),
+	//           param_3 => 42 ) ;
+	//
+	// In the case of nested calls we can use parens depth to differentiate the
+	// PL calls, but that won't work for multiple non-nested calls.
+	//
+	// Open parens count, on the other hand, should work for sequential calls
+	// but not so well for nested calls.
+
+	// TODO: Much like DML case statements, we may want/need to tag pl
+	// function/procedure calls that use named parameters as separate bags.
+
+	key := bagKey(bagType, bagId)
+
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
+
+	if len(b.lines) == 0 {
+		return
+	}
+
+	switch e.Dialect() {
+	case dialect.PostgreSQL, dialect.Oracle:
+	// nada
+	default:
+		return
+	}
+
+	pNcVal := ""
+	initIndents := 0
+	isDirty := false
+	parensDepth := 0
+
+	var newLines [][]FmtToken
+	var newLine []FmtToken
+
+	for _, line := range b.lines {
+		if len(line) == 0 {
+			continue
+		}
+
+		idxMax := len(line) - 1
+
+		// Determine if the indentation needs adjusting
+		if initIndents == 0 {
+			initIndents = line[0].indents
+			if line[0].AsUpper() == "SELECT" {
+				initIndents += 2
+			}
+
+			if initIndents < defIndents {
+				initIndents = defIndents
+			}
+		}
+
+		fcCnt := 0 // count of "fat-commas"
+
+		for idx := 0; idx <= idxMax; idx++ {
+			if line[idx].value == "=>" {
+				fcCnt++
+			}
+		}
+
+		if fcCnt < 3 {
+			newLines = append(newLines, line)
+			continue
+		}
+
+		for idx := 0; idx <= idxMax; idx++ {
+
+			cTok := line[idx]
+			ctVal := cTok.AsUpper()
+
+			switch ctVal {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			}
+
+			switch pNcVal {
+			case ",", "(":
+
+				breakLine := false
+				if idx+1 < idxMax {
+					for j := idx + 1; j <= idxMax; j++ {
+						switch {
+						case line[j].IsCodeComment():
+						// nada
+						case line[j].value == "=>":
+							breakLine = true
+							break
+						default:
+							break
+						}
+					}
+				}
+
+				if breakLine {
+					isDirty = true
+					if len(newLine) > 0 {
+						newLines = append(newLines, newLine)
+						newLine = nil
+						cTok.vSpace = 1
+						cTok.indents = initIndents + parensDepth
+						cTok.hSpace = ""
+					}
+				}
+			}
+
+			if !cTok.IsCodeComment() {
+				pNcVal = ctVal
+			}
+
+			newLine = append(newLine, cTok)
+		}
+
+		if len(newLine) > 0 {
+			newLines = append(newLines, newLine)
+			newLine = nil
+		}
+	}
+
+	if len(newLine) > 0 {
+		newLines = append(newLines, newLine)
+	}
+
+	if isDirty {
+		UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	}
 }
