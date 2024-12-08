@@ -355,25 +355,34 @@ func calcBagLen(e *env.Env, bagMap map[string]TokenBag, bagType, bagId int) int 
 	bagLen := 0
 
 	for _, line := range b.lines {
-		bagLen += calcLineLen(e, line)
+		bagLen += calcLineLen(e, bagMap, line)
 	}
 	return bagLen
 }
 
-func calcLineLen(e *env.Env, tokens []FmtToken) int {
+func calcLineLen(e *env.Env, bagMap map[string]TokenBag, tokens []FmtToken) int {
 
 	lineLen := 0
 	for _, cTok := range tokens {
-		lineLen += tokenLen(e, cTok)
+		lineLen += tokenLen(e, bagMap, cTok)
 	}
 	return lineLen
 }
 
-func tokenLen(e *env.Env, t FmtToken) int {
-	if t.vSpace == 0 {
-		return len(t.hSpace) + len(t.value)
+func tokenLen(e *env.Env, bagMap map[string]TokenBag, t FmtToken) int {
+
+	tl := 0
+	switch {
+	case t.IsBag():
+		tl = calcBagLen(e, bagMap, t.typeOf, t.id)
+	default:
+		tl = len(t.value)
 	}
-	return len(strings.Repeat(e.Indent(), t.indents)) + len(t.value)
+
+	if t.vSpace == 0 {
+		return len(t.hSpace) + tl
+	}
+	return len(strings.Repeat(e.Indent(), t.indents)) + tl
 }
 
 func wrapBools(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
@@ -472,7 +481,7 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 			indentDelta = initIndents - line[0].indents
 		}
 
-		caseLen += calcLineLen(e, line)
+		caseLen += calcLineLen(e, bagMap, line)
 
 		// Get some stats for determining if, and how, the CASE statement needs wrapping
 		for idx := 0; idx < len(line); idx++ {
@@ -556,9 +565,9 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 					cIndents = initIndents + parensDepth + 1
 					if whenI <= len(whens)-1 {
 						when := whens[whenI]
-						when[0].vSpace = 1 // pretend that this is a line
-						when[0].indents = initIndents + parensDepth + 1
-						whenLen = calcLineLen(e, when) + bagLens[whenI]
+						when[0].EnsureVSpace() // pretend that this is a line
+						when[0].AdjustIndents(initIndents + parensDepth + 1)
+						whenLen = calcLineLen(e, bagMap, when) + bagLens[whenI]
 						oCount = others[whenI]
 					}
 					whenI++
@@ -592,10 +601,11 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 				}
 
 				if cTok.vSpace != cVspace || cTok.indents != cIndents {
-
-					cTok.vSpace = cVspace
-					cTok.indents = cIndents
 					isDirty = true
+					if !cTok.IsBag() {
+						cTok.vSpace = cVspace
+						cTok.AdjustIndents(cIndents)
+					}
 
 					if cTok.vSpace > 0 && len(newLine) > 0 {
 						newLines = append(newLines, newLine)
