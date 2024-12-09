@@ -8,6 +8,12 @@ import (
 	"github.com/gsiems/sqlfmt/env"
 )
 
+const (
+	compareOps = iota + 400
+	logicOps
+	mathOps
+)
+
 type TokenBag struct {
 	id       int          // the ID for the bag
 	typeOf   int          // the type of token bag
@@ -302,12 +308,22 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 		}
 	}
 
-	wrapBools(e, bagMap, bagType, bagId, defIndents)
+	// wrap IN
+	// comp_ops   "=", "==", "<", ">", "<>", "!=", ">=", "<="
+	// math_ops   "+", "-", "*", "/"
+	// concat_ops "||"
+	// logic_ops  "AND", "OR"
+	// start at parensDepth == 0, increment and re-run as needed
+
 	wrapPlCalls(e, bagMap, bagType, bagId, defIndents)
 
-	wrapComparisonOps(e, bagMap, bagType, bagId, defIndents)
-	wrapMathOps(e, bagMap, bagType, bagId, defIndents)
-	wrapCsvList(e, bagMap, bagType, bagId, defIndents)
+	for pdl := 0; pdl <= 5; pdl++ {
+
+		wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, logicOps)
+
+		//wrapCsvList(e, bagMap, bagType, bagId, defIndents)
+
+	}
 
 	for _, line := range b.lines {
 		if len(line) == 0 {
@@ -385,12 +401,117 @@ func tokenLen(e *env.Env, bagMap map[string]TokenBag, t FmtToken) int {
 	return len(strings.Repeat(e.Indent(), t.indents)) + tl
 }
 
-func wrapBools(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
+func wrapOps(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents, pdl, opsType int) {
 
-}
+	key := bagKey(bagType, bagId)
 
-func wrapComparisonOps(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
 
+	if len(b.lines) == 0 {
+		return
+	}
+
+	var newLines [][]FmtToken
+	var newLine []FmtToken
+
+	isDirty := false
+	parensDepth := 0
+
+	for _, line := range b.lines {
+
+		if len(line) == 0 {
+			continue
+		}
+
+		lineLen := calcLineLen(e, bagMap, line)
+		tooLong := lineLen > e.MaxLineLength()
+
+		if !tooLong {
+			newLines = append(newLines, line)
+			continue
+		}
+
+		idxMax := len(line) - 1
+		pKwVal := ""
+		parensDepth = 0
+
+		initIndents := line[0].indents
+
+		if line[0].AsUpper() == "SELECT" {
+			initIndents += 2
+		}
+		initIndents = max(initIndents, defIndents)
+
+		for idx := 0; idx <= idxMax; idx++ {
+
+			cTok := line[idx]
+			switch cTok.value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			}
+
+			matches := false
+			switch opsType {
+			case compareOps:
+				switch cTok.value {
+				case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
+					matches = true
+				}
+			case mathOps:
+				switch cTok.value {
+				case "+", "-", "*", "/":
+					matches = true
+				}
+
+			case logicOps:
+				switch cTok.AsUpper() {
+				case "OR":
+					matches = true
+				case "AND":
+					switch pKwVal {
+					case "BETWEEN", "PRECEDING", "FOLLOWING", "ROW":
+					// nada
+					default:
+						matches = true
+					}
+				}
+			}
+
+			if matches && parensDepth == pdl {
+				if len(newLine) > 0 {
+					newLines = append(newLines, newLine)
+					newLine = nil
+				}
+				cTok.EnsureVSpace()
+				cTok.AdjustIndents(initIndents + parensDepth + 1)
+				isDirty = true
+			}
+
+			if !cTok.IsKeyword() {
+				pKwVal = cTok.AsUpper()
+			}
+
+			newLine = append(newLine, cTok)
+		}
+
+		if len(newLine) > 0 {
+			newLines = append(newLines, newLine)
+			newLine = nil
+		}
+	}
+
+	if len(newLine) > 0 {
+		newLines = append(newLines, newLine)
+	}
+
+	if isDirty {
+		UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	}
 }
 
 func wrapCsvList(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
@@ -651,10 +772,6 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 	if isDirty {
 		UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
 	}
-}
-
-func wrapMathOps(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
-
 }
 
 func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
