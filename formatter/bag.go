@@ -319,6 +319,8 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 
 	for pdl := 0; pdl <= 5; pdl++ {
 
+		wrapCsv(e, bagMap, bagType, bagId, defIndents, pdl)
+
 		wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, logicOps)
 
 		//wrapCsvList(e, bagMap, bagType, bagId, defIndents)
@@ -514,8 +516,228 @@ func wrapOps(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 	}
 }
 
-func wrapCsvList(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
+func wrapCsv(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents, pdl int) {
 
+	key := bagKey(bagType, bagId)
+
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
+
+	var newLines [][]FmtToken
+
+	if len(b.lines) == 0 {
+		return
+	}
+
+	isDirty := false
+	inPdl := pdl == 0
+	inPre := !inPdl
+
+	for _, line := range b.lines {
+
+		if len(line) == 0 {
+			continue
+		}
+
+		lineLen := calcLineLen(e, bagMap, line)
+		tooLong := lineLen > e.MaxLineLength()
+
+		if !tooLong {
+			newLines = append(newLines, line)
+			continue
+		}
+
+		idxMax := len(line) - 1
+		pNcVal := ""
+		parensDepth := 0
+
+		initIndents := line[0].indents
+
+		if line[0].AsUpper() == "SELECT" {
+			initIndents += 2
+		}
+		initIndents = max(initIndents, defIndents)
+
+		cCnt := 0
+		isIN := false
+
+		var csi [][]FmtToken
+		var csin []FmtToken
+		var pre []FmtToken
+		var post []FmtToken
+
+		for idx := 0; idx <= idxMax; idx++ {
+
+			cTok := line[idx]
+
+			switch {
+			case inPre:
+				pre = append(pre, cTok)
+			case inPdl:
+				if isIN {
+					csin = append(csin, cTok)
+				} else {
+					for len(csi) <= cCnt {
+						csi = append(csi, []FmtToken{})
+					}
+					csi[cCnt] = append(csi[cCnt], cTok)
+				}
+			default:
+				// post
+				post = append(post, cTok)
+			}
+
+			switch cTok.value {
+			case "(":
+				parensDepth++
+				inPdl = parensDepth >= pdl
+
+				if parensDepth == pdl && !isIN {
+					isIN = pNcVal == "IN"
+				}
+
+				if inPdl {
+					inPre = false
+				}
+
+			case ")":
+				parensDepth--
+				inPdl = parensDepth >= pdl
+				if !inPdl {
+					isIN = false
+				}
+
+			case ",":
+				if parensDepth == pdl {
+					cCnt++
+				}
+			}
+
+			if !cTok.IsCodeComment() {
+				pNcVal = cTok.AsUpper()
+			}
+		}
+
+		switch {
+		case len(csin) > 0:
+
+			var acc []FmtToken
+			acc = append(acc, pre...)
+			cumLen := calcLineLen(e, bagMap, pre)
+
+			for i := 0; i < len(csin); i++ {
+				cTok := csin[i]
+				cumLen += tokenLen(e, bagMap, cTok)
+
+				switch {
+				case cTok.value == ",":
+					acc = append(acc, cTok)
+
+				case cumLen >= e.MaxLineLength():
+					newLines = append(newLines, acc)
+					acc = nil
+					isDirty = true
+					cTok.EnsureVSpace()
+					cTok.AdjustIndents(initIndents + max(pdl, 1))
+					acc = append(acc, cTok)
+					cumLen = tokenLen(e, bagMap, cTok)
+
+				default:
+					acc = append(acc, cTok)
+				}
+			}
+
+			postLen := calcLineLen(e, bagMap, post)
+
+			switch {
+			case cumLen+postLen == 0:
+			// nada
+			case postLen == 0:
+				newLines = append(newLines, acc)
+			case cumLen == 0:
+				newLines = append(newLines, post)
+			case cumLen+postLen > e.MaxLineLength():
+				newLines = append(newLines, acc)
+				post[0].EnsureVSpace()
+				post[0].AdjustIndents(initIndents + max(pdl, 1))
+				newLines = append(newLines, post)
+			default:
+				acc = append(acc, post...)
+				newLines = append(newLines, acc)
+			}
+
+		case len(csi) > 0:
+
+			if len(pre) > 0 {
+				newLines = append(newLines, pre)
+			}
+
+			for i := 0; i < len(csi); i++ {
+
+				isDirty = true
+				cToks := csi[i]
+
+				if len(cToks) == 0 {
+					continue
+				}
+
+				switch i {
+				case 0:
+					// The first line
+					if len(pre) > 0 {
+						cToks[0].EnsureVSpace()
+						cToks[0].AdjustIndents(initIndents + max(pdl, 1))
+					}
+					newLines = append(newLines, cToks)
+
+				case len(csi) - 1:
+					// The last line
+					cToks[0].EnsureVSpace()
+					cToks[0].AdjustIndents(initIndents + max(pdl, 1))
+					cLen := calcLineLen(e, bagMap, cToks)
+					postLen := calcLineLen(e, bagMap, post)
+
+					switch {
+					case cLen+postLen == 0:
+						// nada
+					case postLen == 0:
+						newLines = append(newLines, cToks)
+					case cLen == 0:
+						post[0].EnsureVSpace()
+						post[0].AdjustIndents(initIndents + max(pdl, 1))
+						newLines = append(newLines, post)
+					case cLen+postLen >= e.MaxLineLength():
+						// cToks and post are separate lines
+						newLines = append(newLines, cToks)
+						post[0].EnsureVSpace()
+						post[0].AdjustIndents(initIndents + max(pdl, 1))
+						newLines = append(newLines, post)
+					default:
+						// cToks and post are one line
+						post[0].vSpace = 0
+						post[0].indents = 0
+						post[0].hSpace = " "
+						cToks = append(cToks, post...)
+						newLines = append(newLines, cToks)
+					}
+
+				default:
+					cToks[0].EnsureVSpace()
+					cToks[0].AdjustIndents(initIndents + pdl)
+					newLines = append(newLines, cToks)
+				}
+			}
+		default:
+			// both csi and csin are empty
+			newLines = append(newLines, line)
+		}
+	}
+
+	if isDirty {
+		UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	}
 }
 
 func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
