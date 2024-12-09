@@ -889,9 +889,8 @@ func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 					if len(newLine) > 0 {
 						newLines = append(newLines, newLine)
 						newLine = nil
-						cTok.vSpace = 1
-						cTok.indents = initIndents + parensDepth
-						cTok.hSpace = ""
+						cTok.EnsureVSpace()
+						cTok.AdjustIndents(initIndents + parensDepth)
 					}
 				}
 			}
