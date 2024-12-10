@@ -315,7 +315,9 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 	// logic_ops  "AND", "OR"
 	// start at parensDepth == 0, increment and re-run as needed
 
-	//wrapPlCalls(e, bagMap, bagType, bagId, defIndents)
+	for pdl := 1; pdl <= 5; pdl++ {
+		wrapPlCalls(e, bagMap, bagType, bagId, defIndents, pdl)
+	}
 
 	for pdl := 0; pdl <= 5; pdl++ {
 
@@ -1003,7 +1005,7 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 	}
 }
 
-func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents int) {
+func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents, pdl int) {
 
 	// Note that it is possible for a line to contain multiple PL calls
 	// and/or nested PL calls
@@ -1044,7 +1046,6 @@ func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 	}
 
 	pNcVal := ""
-	initIndents := 0
 	isDirty := false
 	parensDepth := 0
 
@@ -1059,22 +1060,25 @@ func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 		idxMax := len(line) - 1
 
 		// Determine if the indentation needs adjusting
-		if initIndents == 0 {
-			initIndents = line[0].indents
-			if line[0].AsUpper() == "SELECT" {
-				initIndents += 2
-			}
+		initIndents := line[0].indents
 
-			if initIndents < defIndents {
-				initIndents = defIndents
-			}
+		if line[0].AsUpper() == "SELECT" {
+			initIndents += 2
 		}
+		initIndents = max(initIndents, defIndents)
 
 		fcCnt := 0 // count of "fat-commas"
 
 		for idx := 0; idx <= idxMax; idx++ {
-			if line[idx].value == "=>" {
-				fcCnt++
+			switch line[idx].value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			case "=>":
+				if parensDepth == pdl {
+					fcCnt++
+				}
 			}
 		}
 
@@ -1105,8 +1109,10 @@ func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 						case line[j].IsCodeComment():
 						// nada
 						case line[j].value == "=>":
-							breakLine = true
-							break
+							if parensDepth == pdl {
+								breakLine = true
+								break
+							}
 						default:
 							break
 						}
