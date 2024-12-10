@@ -486,10 +486,15 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		// Determine if a new-line should be applied before specific tokens
 		switch ctVal {
 		case "BEGIN", "BREAK", "CALL", "CLOSE", "CONTINUE", "DECLARE",
-			"ELSE", "ELSEIF", "ELSIF", "END", "EXCEPTION", "EXECUTE", "EXIT",
-			"FOR", "OPEN", "RETURN", "WHILE":
+			"ELSE", "ELSEIF", "ELSIF", "END", "EXCEPTION", "EXIT", "FOR",
+			"OPEN", "RETURN", "WHILE":
 
 			ensureVSpace = true
+
+		case "EXECUTE":
+			if pNcVal != "IN" {
+				ensureVSpace = true
+			}
 
 		case "IF", "CASE":
 			if pNcVal != "END" {
