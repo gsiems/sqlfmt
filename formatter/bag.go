@@ -315,15 +315,13 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 	// logic_ops  "AND", "OR"
 	// start at parensDepth == 0, increment and re-run as needed
 
-	wrapPlCalls(e, bagMap, bagType, bagId, defIndents)
+	//wrapPlCalls(e, bagMap, bagType, bagId, defIndents)
 
 	for pdl := 0; pdl <= 5; pdl++ {
 
-		wrapCsv(e, bagMap, bagType, bagId, defIndents, pdl)
+		//wrapCsv(e, bagMap, bagType, bagId, defIndents, pdl)
 
-		wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, logicOps)
-
-		//wrapCsvList(e, bagMap, bagType, bagId, defIndents)
+		//wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, logicOps)
 
 	}
 
@@ -473,7 +471,12 @@ func wrapOps(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 			case logicOps:
 				switch cTok.AsUpper() {
 				case "OR":
-					matches = true
+					switch pKwVal {
+					case "CREATE":
+					// nada
+					default:
+						matches = true
+					}
 				case "AND":
 					switch pKwVal {
 					case "BETWEEN", "PRECEDING", "FOLLOWING", "ROW":
@@ -776,6 +779,10 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 
 	// Fortunately DML case statements have been separated into their own bag
 
+	if bagType != DMLCaseBag {
+		return
+	}
+
 	key := bagKey(bagType, bagId)
 
 	b, ok := bagMap[key]
@@ -870,7 +877,7 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 		wrapCase = true
 	}
 
-	if !wrapCase && indentDelta != 0 {
+	if !wrapCase && indentDelta == 0 {
 		return
 	}
 
