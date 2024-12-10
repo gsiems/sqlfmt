@@ -200,7 +200,6 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 	ddlAction := ""
 	objType := ""
-	lineCount := 0
 
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
@@ -328,11 +327,7 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		indents := baseIndents + parensDepth
 
 		if idx > 0 && cTok.vSpace > 0 {
-			lineCount++
-		}
-
-		if lineCount > 0 {
-			indents++
+			indents = max(indents, 1)
 		}
 
 		if cTok.vSpace > 0 {
