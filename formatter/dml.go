@@ -418,6 +418,64 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	return remainder
 }
 
+func formatDMLKeywords(e *env.Env, tokens []FmtToken) ([]FmtToken) {
+
+	switch e.KeywordCase() {
+	case env.UpperCase:
+	// nada
+	default:
+		return tokens
+	}
+
+	var ret []FmtToken
+
+	for _, cTok := range tokens {
+
+		ctVal := cTok.AsUpper()
+
+		switch ctVal {
+		case "ALL", "AND", "ANY", "AS", "ASC", "BETWEEN", "BY", "CASCADE",
+			"CASE", "COLLATE", "CONCURRENTLY", "CONFLICT", "CONSTRAINT",
+			"CROSS", "CURRENT", "DATA", "DELETE", "DESC", "DISTINCT", "DO",
+			"ELSE", "END", "EXCEPT", "EXISTS", "FETCH", "FIRST", "FOR", "FROM",
+			"FULL", "GROUP", "HAVING", "IDENTITY", "IN", "INNER", "INSERT",
+			"INTERSECT", "INTO", "IS", "JOIN", "LAST", "LATERAL", "LEFT",
+			"LIKE", "LIMIT", "MATCHED", "MATERIALIZED", "MERGE", "MINUS",
+			"NATURAL", "NEXT", "NFC", "NFD", "NFKC", "NFKD", "NO",
+			"NORMALIZED", "NOT", "NOTHING", "NOWAIT", "NULL", "NULLS", "OF",
+			"OFFSET", "ON", "ONLY", "OR", "ORDER", "OUTER", "OVER",
+			"OVERRIDING", "PARTITION", "RECURSIVE", "REFRESH", "REINDEX",
+			"RESTART", "RETURNING", "RIGHT", "ROW", "ROWS", "SELECT", "SET",
+			"SHARE", "SOURCE", "SYSTEM", "TABLE", "TARGET", "TEMP",
+			"TEMPORARY", "THEN", "TRUNCATE", "UNION", "UNLOGGED", "UPDATE",
+			"UPSERT", "USING", "VALUE", "VALUES", "VIEW", "WHEN", "WHERE",
+			"WINDOW", "WITH", "WITHIN":
+
+			if cTok.IsKeyword() {
+				cTok.SetUpper()
+			}
+		}
+
+		switch e.Dialect() {
+		case dialect.PostgreSQL:
+			switch ctVal {
+			case "RECURSIVE", "LOCAL", "CHECK", "OPTION", "CASCADED",
+				"SOURCE", "TARGET":
+				cTok.SetUpper()
+			}
+		case dialect.SQLite:
+			switch ctVal {
+			case "REPLACE":
+				cTok.SetUpper()
+			}
+		}
+
+		ret = append(ret, cTok)
+	}
+
+	return ret
+}
+
 func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
@@ -431,7 +489,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
-	line := b.lines[0]
+	line := formatDMLKeywords(e, b.lines[0])
 
 	cat := newFmtStat()
 	idxMax := len(line) - 1
@@ -444,49 +502,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	var ppNcVal string // The upper case value of the previous to the previous non-comment token
 	var pKwVal string  // The upper case value of the previous keyword token
 
-	// ucKw: The list of keywords that can be set to upper-case
-	var ucKw = []string{"ALL", "AND", "ANY", "AS", "ASC", "BETWEEN",
-		"BY", "CASCADE", "CASE", "COLLATE", "CONCURRENTLY", "CONFLICT",
-		"CONSTRAINT", "CROSS", "CURRENT", "DATA", "DELETE", "DESC",
-		"DISTINCT", "DO", "ELSE", "END", "EXCEPT", "EXISTS", "FETCH", "FIRST",
-		"FOR", "FROM", "FULL", "GROUP", "HAVING", "IDENTITY", "IN", "INNER",
-		"INSERT", "INTERSECT", "INTO", "IS", "JOIN", "LAST", "LATERAL", "LEFT",
-		"LIKE", "LIMIT", "MATCHED", "MATERIALIZED", "MERGE", "MINUS",
-		"NATURAL", "NEXT", "NFC", "NFD", "NFKC", "NFKD", "NO", "NORMALIZED",
-		"NOT", "NOTHING", "NOWAIT", "NULL", "NULLS", "OF", "OFFSET", "ON",
-		"ONLY", "OR", "ORDER", "OUTER", "OVER", "OVERRIDING", "PARTITION",
-		"RECURSIVE", "REFRESH", "REINDEX", "RESTART", "RETURNING", "RIGHT",
-		"ROW", "ROWS", "SELECT", "SET", "SHARE", "SOURCE", "SYSTEM", "TABLE",
-		"TARGET", "TEMP", "TEMPORARY", "THEN", "TRUNCATE", "UNION", "UNLOGGED",
-		"UPDATE", "UPSERT", "USING", "VALUE", "VALUES", "VIEW", "WHEN",
-		"WHERE", "WINDOW", "WITH", "WITHIN"}
-
-	//var ucPKw = []string{"RECURSIVE", "LOCAL", "CHECK", "OPTION", "CASCADED"}
-
 	for idx := 0; idx <= idxMax; idx++ {
 
 		cTok := line[idx]
 		ctVal := cTok.AsUpper()
-
-		// Update keyword capitalization as needed
-		// Identifiers should have been properly cased in cleanupParsed
-		if cTok.IsKeyword() {
-			cTok.SetKeywordCase(e, ucKw)
-		}
-
-		switch e.Dialect() {
-		case dialect.PostgreSQL:
-			switch ctVal {
-			case "RECURSIVE", "LOCAL", "CHECK", "OPTION", "CASCADED",
-				"SOURCE", "TARGET":
-				cTok.SetKeywordCase(e, []string{ctVal})
-			}
-		case dialect.SQLite:
-			switch ctVal {
-			case "REPLACE":
-				cTok.SetKeywordCase(e, []string{ctVal})
-			}
-		}
 
 		////////////////////////////////////////////////////////////////
 		// Track the DML type and current clause
@@ -900,6 +919,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			indents += localIndents
 
 		} // end cTok.vSpace > 0
+
+// using ( select
+// from ( select
+// ... ( select
 
 		switch {
 		case cTok.IsDMLBag(), cTok.IsDMLCaseBag():

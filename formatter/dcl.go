@@ -15,6 +15,44 @@ func tagDCL(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	return remainder
 }
 
+func formatDCLKeywords(e *env.Env, tokens []FmtToken)  ([]FmtToken) {
+
+	switch e.KeywordCase() {
+	case env.UpperCase:
+	// nada
+	default:
+		return tokens
+	}
+
+	var ret []FmtToken
+
+	for _, cTok := range tokens {
+
+		ctVal := cTok.AsUpper()
+
+		switch ctVal {
+		case "ADMIN", "ALL", "ALTER", "BY", "CASCADE", "CONNECT", "CREATE",
+			"DATA", "DATABASE", "DELETE", "DOMAIN", "EXECUTE", "FOR",
+			"FOREIGN", "FROM", "FUNCTION", "FUNCTIONS", "GRANT", "GRANTED",
+			"IN", "INHERIT", "INSERT", "LANGUAGE", "LARGE", "MAINTAIN",
+			"OBJECT", "ON", "OPTION", "PARAMETER", "PRIVILEGES", "PROCEDURE",
+			"PROCEDURES", "REFERENCES", "RESTRICT", "REVOKE", "ROUTINE",
+			"ROUTINES", "SCHEMA", "SELECT", "SEQUENCE", "SEQUENCES", "SERVER",
+			"SET", "SYSTEM", "TABLE", "TABLES", "TABLESPACE", "TEMP",
+			"TEMPORARY", "TO", "TRIGGER", "TRUNCATE", "TYPE", "UPDATE",
+			"USAGE", "WITH", "WRAPPER":
+
+			if cTok.IsKeyword() {
+				cTok.SetUpper()
+			}
+		}
+
+		ret = append(ret, cTok)
+	}
+
+	return ret
+}
+
 func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
@@ -28,7 +66,7 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
-	line := b.lines[0]
+	line := formatDCLKeywords(e, b.lines[0])
 
 	idxMax := len(line) - 1
 	parensDepth := 0
@@ -40,28 +78,11 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	var pTok FmtToken // The previous token
 	var pNcVal string // The upper case value of the previous non-comment token
 
-	// ucKw: The list of keywords that can be set to upper-case
-	var ucKw = []string{"ADMIN", "ALL", "ALTER", "BY", "CASCADE", "CONNECT",
-		"CREATE", "DATA", "DATABASE", "DELETE", "DOMAIN", "EXECUTE", "FOR",
-		"FOREIGN", "FROM", "FUNCTION", "FUNCTIONS", "GRANT", "GRANTED", "IN",
-		"INHERIT", "INSERT", "LANGUAGE", "LARGE", "MAINTAIN", "OBJECT", "ON",
-		"OPTION", "PARAMETER", "PRIVILEGES", "PROCEDURE", "PROCEDURES",
-		"REFERENCES", "RESTRICT", "REVOKE", "ROUTINE", "ROUTINES", "SCHEMA",
-		"SELECT", "SEQUENCE", "SEQUENCES", "SERVER", "SET", "SYSTEM", "TABLE",
-		"TABLES", "TABLESPACE", "TEMP", "TEMPORARY", "TO", "TRIGGER",
-		"TRUNCATE", "TYPE", "UPDATE", "USAGE", "WITH", "WRAPPER"}
-
 	for idx := 0; idx <= idxMax; idx++ {
 
 		// current token
 		cTok := line[idx]
 		ctVal := cTok.AsUpper()
-
-		// Update keyword capitalization as needed
-		// Identifiers should have been properly cased in cleanupParsed
-		if cTok.IsKeyword() {
-			cTok.SetKeywordCase(e, ucKw)
-		}
 
 		////////////////////////////////////////////////////////////////
 		// Determine the preceding vertical spacing (if any)

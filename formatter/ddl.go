@@ -179,6 +179,150 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	return remainder
 }
 
+func ddlObjType(e *env.Env, tokens []FmtToken) string {
+
+	idxMax := len(tokens) - 1
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		cTok := tokens[idx]
+		ctVal := cTok.AsUpper()
+
+		switch ctVal {
+
+		case "ACCESS", "EVENT", "FOREIGN", "LARGE", "MATERIALIZED",
+			"OPERATOR", "TRANSFORM":
+
+			if idx < idxMax {
+				tVal := ctVal + " " + tokens[idx+1].AsUpper()
+
+				switch tVal {
+
+				case "ACCESS METHOD", "EVENT TRIGGER", "FOREIGN TABLE",
+					"LARGE OBJECT", "MATERIALIZED VIEW", "OPERATOR CLASS",
+					"OPERATOR FAMILY", "TRANSFORM FOR":
+
+					return tVal
+
+				case "FOREIGN DATA":
+					return "FOREIGN DATA WRAPPER"
+				}
+			}
+
+			if ctVal == "OPERATOR" {
+				return ctVal
+			}
+
+		case "AGGREGATE", "CAST", "COLLATION", "COLUMN", "CONSTRAINT",
+			"CONVERSION", "DATABASE", "DOMAIN", "EXTENSION", "FUNCTION",
+			"INDEX", "LANGUAGE", "POLICY", "PROCEDURE",
+			"PUBLICATION", "ROLE", "ROUTINE", "RULE", "SCHEMA", "SEQUENCE",
+			"SERVER", "STATISTICS", "SUBSCRIPTION", "TABLE", "TABLESPACE",
+			"TRIGGER", "TYPE", "VIEW":
+
+			return ctVal
+		}
+
+	}
+	return ""
+}
+
+func formatDDLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
+
+	switch e.KeywordCase() {
+	case env.UpperCase:
+	// nada
+	default:
+		return tokens
+	}
+
+	var ret []FmtToken
+
+	objType := ddlObjType(e, tokens)
+	parensDepth := 0
+
+	for _, cTok := range tokens {
+
+		ctVal := cTok.AsUpper()
+
+		switch objType {
+		case "TABLE":
+			switch ctVal {
+			case "ADD", "ALTER", "ALWAYS", "AND", "AS", "ATTACH", "BY",
+				"CASCADE", "CHECK", "COLUMN", "COMMENT", "COMMIT",
+				"CONCURRENTLY", "CONSTRAINT", "CREATE", "DATA", "DEFAULT",
+				"DELETE", "DETACH", "DROP", "EXCLUDE", "EXECUTE", "FOR",
+				"FOREIGN", "FROM", "GENERATED", "GLOBAL", "HASH", "IDENTITY",
+				"IN", "INDEX", "IS", "KEY", "LIST", "NOT", "NULL", "OF", "ON",
+				"OPTIONS", "OWNER", "PARTITION", "PREPARE", "PRIMARY", "RANGE",
+				"REFERENCES", "RENAME", "RESTRICT", "SELECT", "SET", "TABLE",
+				"TABLESPACE", "TEMP", "TEMPORARY", "TO", "TYPE", "UNIQUE",
+				"UPDATE", "USING", "VALIDATE", "VALUES", "WHERE", "WITH":
+
+				cTok.SetUpper()
+			}
+
+		case "DATABASE":
+			switch ctVal {
+			case "ALTER", "CASCADE", "CREATE", "DATABASE", "DROP", "EXISTS",
+				"FORCE", "IF", "ON", "OWNER", "RENAME", "SET", "TO", "WITH":
+				cTok.SetUpper()
+			case "ALLOW_CONNECTIONS", "BUILTIN_LOCALE",
+				"COLLATION_VERSION", "ICU_LOCALE", "ICU_RULES",
+				"IS_TEMPLATE", "LC_COLLATE", "LC_CTYPE", "LOCALE",
+				"LOCALE_PROVIDER", "OID", "STRATEGY":
+				switch e.Dialect() {
+				case dialect.PostgreSQL:
+					cTok.SetUpper()
+				}
+			}
+
+		case "RULE":
+			switch ctVal {
+			case "ALSO", "INSTEAD", "NOTHING":
+				switch e.Dialect() {
+				case dialect.PostgreSQL:
+					cTok.SetUpper()
+				}
+			}
+
+		case "SERVER":
+			switch ctVal {
+			case "ADD", "SET", "DROP":
+				switch e.Dialect() {
+				case dialect.PostgreSQL:
+					cTok.SetUpper()
+				}
+			}
+		}
+
+		switch ctVal {
+		case "AND", "OR", "NOT":
+			cTok.SetUpper()
+		case "IS", "DISTINCT":
+			switch e.Dialect() {
+			case dialect.PostgreSQL:
+				cTok.SetUpper()
+			}
+		case "(":
+			parensDepth++
+		case ")":
+			parensDepth--
+		default:
+			switch parensDepth {
+			case 0:
+				if cTok.IsKeyword() && !cTok.IsDatatype() {
+					cTok.SetUpper()
+				}
+			}
+		}
+
+		ret = append(ret, cTok)
+	}
+
+	return ret
+}
+
 func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
@@ -192,14 +336,14 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
-	line := b.lines[0]
+	line := formatDDLKeywords(e, b.lines[0])
 
 	idxMax := len(line) - 1
 
 	parensDepth := 0
 
 	ddlAction := ""
-	objType := ""
+	//objType := ddlObjType(e, line)
 
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
@@ -216,100 +360,6 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			switch ctVal {
 			case "CREATE", "ALTER", "DROP":
 				ddlAction = ctVal
-			}
-		}
-
-		switch objType {
-		case "":
-			switch ctVal {
-			case "AGGREGATE", "CAST", "COLLATION", "COLUMN", "CONSTRAINT",
-				"CONVERSION", "DATABASE", "DOMAIN", "EXTENSION", "FUNCTION",
-				"INDEX", "LANGUAGE", "POLICY", "PROCEDURE",
-				"PUBLICATION", "ROLE", "ROUTINE", "RULE", "SCHEMA", "SEQUENCE",
-				"SERVER", "STATISTICS", "SUBSCRIPTION", "TABLE", "TABLESPACE",
-				"TRIGGER", "TYPE", "VIEW":
-
-				objType = ctVal
-
-			case "ACCESS", "EVENT", "FOREIGN", "LARGE", "MATERIALIZED",
-				"OPERATOR", "TRANSFORM":
-
-				if idx < idxMax {
-					nTok := line[idx+1]
-					switch ctVal + " " + nTok.AsUpper() {
-
-					case "ACCESS METHOD", "EVENT TRIGGER", "FOREIGN TABLE",
-						"LARGE OBJECT", "MATERIALIZED VIEW", "OPERATOR CLASS",
-						"OPERATOR FAMILY", "TRANSFORM FOR":
-						objType = ctVal + " " + nTok.AsUpper()
-
-					case "FOREIGN DATA":
-						objType = "FOREIGN DATA WRAPPER"
-					}
-				}
-
-				if objType == "" && ctVal == "OPERATOR" {
-					objType = ctVal
-				}
-			}
-		}
-
-		////////////////////////////////////////////////////////////////
-		// Update keyword capitalization as needed
-		// Identifiers should have been properly cased in cleanupParsed
-		//		if cTok.IsKeyword() && !cTok.IsDatatype() {
-		//			cTok.SetKeywordCase(e, []string{ctVal})
-		//		}
-
-		switch objType {
-		case "TABLE":
-			switch ctVal {
-			case "ALTER", "CASCADE", "CONSTRAINT", "CREATE",
-				"DEFAULT", "DROP", "FOREIGN", "INDEX", "KEY", "NULL", "ON",
-				"OWNER", "PRIMARY", "REFERENCES", "RESTRICT", "SET", "TABLE",
-				"TO", "UNIQUE", "UPDATE":
-				cTok.SetKeywordCase(e, []string{ctVal})
-			}
-
-		default:
-			switch parensDepth {
-			case 0:
-				if cTok.IsKeyword() && !cTok.IsDatatype() {
-					cTok.SetKeywordCase(e, []string{ctVal})
-				}
-			}
-
-			switch objType {
-			case "DATABASE":
-				switch ctVal {
-				case "ALTER", "CASCADE", "CREATE", "DATABASE", "DROP", "EXISTS",
-					"FORCE", "IF", "ON", "OWNER", "RENAME", "SET", "TO", "WITH":
-					cTok.SetKeywordCase(e, []string{ctVal})
-				}
-
-				switch e.Dialect() {
-				case dialect.PostgreSQL:
-					switch ctVal {
-					case "ALLOW_CONNECTIONS", "BUILTIN_LOCALE",
-						"COLLATION_VERSION", "ICU_LOCALE", "ICU_RULES",
-						"IS_TEMPLATE", "LC_COLLATE", "LC_CTYPE", "LOCALE",
-						"LOCALE_PROVIDER", "OID", "STRATEGY":
-						cTok.SetKeywordCase(e, []string{ctVal})
-					}
-				}
-			}
-		}
-
-		switch ctVal {
-		case "AND", "OR", "NOT":
-			cTok.SetKeywordCase(e, []string{ctVal})
-		}
-
-		switch e.Dialect() {
-		case dialect.PostgreSQL:
-			switch ctVal {
-			case "IS", "DISTINCT":
-				cTok.SetKeywordCase(e, []string{ctVal})
 			}
 		}
 

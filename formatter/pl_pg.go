@@ -409,6 +409,101 @@ func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) str
 	return paramLabel
 }
 
+func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) ([]FmtToken) {
+
+	switch e.KeywordCase() {
+	case env.UpperCase:
+	// nada
+	default:
+		return tokens
+	}
+
+	var ret []FmtToken
+	var pNcVal string
+
+	for _, cTok := range tokens {
+
+		ctVal := cTok.AsUpper()
+
+		switch ctVal {
+		case "AND", "ANY", "AS", "ATOMIC", "BEGIN", "BREAK", "CASE", "CLOSE",
+			"CONCURRENTLY", "CONTINUE", "DECLARE", "DISTINCT", "ELSE",
+			"ELSEIF", "ELSIF", "END", "EXECUTE", "EXCEPTION", "EXIT", "FOR",
+			"FOREACH", "FROM", "GET", "IF", "IN", "IS", "LIKE", "LOOP",
+			"MATERIALIZED", "NEXT", "NOT", "NULL", "OPEN", "OR", "QUERY",
+			"RAISE", "REFRESH", "RETURN", "SETOF", "THEN", "VIEW", "WHEN",
+			"WHILE":
+
+//"SQLERRM", "SQLSTATE", "STACKED", "DIAGNOSTICS",
+
+			cTok.SetUpper()
+		case "NOTICE", "WARNING":
+			if pNcVal == "RAISE" {
+				cTok.SetUpper()
+			}
+		}
+
+		if !cTok.IsCodeComment() {
+			pNcVal = ctVal
+		}
+
+		ret = append(ret, cTok)
+	}
+
+	return ret
+}
+
+func formatPgPLNonBodyKeywords(e *env.Env, tokens []FmtToken) ([]FmtToken) {
+
+	switch e.KeywordCase() {
+	case env.UpperCase:
+	// nada
+	default:
+		return tokens
+	}
+
+	var ret []FmtToken
+	var pNcVal string
+
+	for _, cTok := range tokens {
+
+		ctVal := cTok.AsUpper()
+
+		switch ctVal {
+		case "AFTER", "AND", "AS", "BEFORE", "CALLED", "CONSTRAINT", "COST",
+			"CREATE", "CURRENT", "DEFAULT", "DEFERRABLE", "DEFERRED",
+			"DEFINER", "DELETE", "DISTINCT", "DO", "EACH", "EXECUTE",
+			"EXTERNAL", "FOR", "FROM", "FUNCTION", "IMMEDIATE", "IMMUTABLE",
+			"INITIALLY", "INPUT", "INSERT", "INSTEAD", "INVOKER", "IS",
+			"LANGUAGE", "LEAKPROOF", "NEW", "NOT", "NULL", "OF", "OLD", "ON",
+			"OR", "PARALLEL", "PROCEDURE", "REFERENCING", "REPLACE",
+			"RESTRICTED", "RETURNS", "ROW", "ROWS", "SAFE", "SECURITY", "SET",
+			"SETOF", "STABLE", "STATEMENT", "STRICT", "SUPPORT", "TABLE", "TO",
+			"TRANSFORM", "TRIGGER", "TRUNCATE", "TYPE", "UNSAFE", "UPDATE",
+			"VOLATILE", "WHEN", "WINDOW":
+
+			cTok.SetUpper()
+		}
+
+		// check for language
+		switch pNcVal {
+		case "LANGUAGE":
+			switch ctVal {
+			case "SQL", "C":
+				cTok.SetUpper()
+			}
+		}
+
+		if !cTok.IsCodeComment() {
+			pNcVal = ctVal
+		}
+
+		ret = append(ret, cTok)
+	}
+
+	return ret
+}
+
 func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
 
 	key := bagKey(bagType, bagId)
@@ -422,7 +517,7 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		return
 	}
 
-	line := b.lines[0]
+	line := formatPgPLBodyKeywords(e, b.lines[0])
 
 	idxMax := len(line) - 1
 
@@ -434,35 +529,10 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 	var pNcVal string // The upper case value of the previous non-comment token
 	var pKwVal string // The upper case value of the previous keyword token
 
-	// ucKw: The list of keywords that can be set to upper-case
-	var ucKw = []string{"AND", "ANY", "OR", "NOT", "IS", "NULL", "AS", "FOREACH",
-		"BEGIN", "BREAK", "CASE", "CLOSE", "CONTINUE", "DECLARE",
-		"DIAGNOSTICS", "DISTINCT", "ELSE", "ELSEIF", "ELSIF", "END", "EXECUTE",
-		"EXCEPTION", "EXIT", "FOR", "FROM", "GET", "IF", "IN", "IS", "LIKE",
-		"LOOP", "NEXT", "NOTICE", "OPEN", "QUERY", "RAISE", "RETURN", "SETOF",
-		"STACKED", "THEN", "WHEN", "WHILE", "SQLSTATE", "SQLERRM", "REFRESH",
-		"MATERIALIZED", "VIEW", "CONCURRENTLY", "WARNING", "ATOMIC"}
-
 	for idx := 0; idx <= idxMax; idx++ {
 
 		cTok := line[idx]
 		ctVal := cTok.AsUpper()
-
-		////////////////////////////////////////////////////////////////
-		// Update keyword capitalization as needed
-		// Identifiers should have been properly cased in cleanupParsed
-		if cTok.IsKeyword() && !cTok.IsDatatype() {
-			cTok.SetKeywordCase(e, ucKw)
-		}
-
-		switch ctVal {
-		case "IS", "DISTINCT", "RAISE":
-			cTok.SetKeywordCase(e, []string{ctVal})
-		case "NOTICE", "WARNING", "EXCEPTION":
-			if pNcVal == "RAISE" {
-				cTok.SetKeywordCase(e, []string{ctVal})
-			}
-		}
 
 		////////////////////////////////////////////////////////////////
 		// Update the block/branch stack
@@ -697,7 +767,7 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 		return
 	}
 
-	line := b.lines[0]
+	line := formatPgPLNonBodyKeywords(e, b.lines[0])
 
 	idxMax := len(line) - 1
 
@@ -707,18 +777,6 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
 	var pNcVal string // The upper case value of the previous non-comment token
-
-	// ucKw: The list of keywords that can be set to upper-case
-	var ucKw = []string{"AFTER", "AND", "AS", "BEFORE", "CALLED", "CONSTRAINT",
-		"COST", "CREATE", "CURRENT", "DEFAULT", "DEFERRABLE", "DEFERRED",
-		"DEFINER", "DELETE", "DO", "EACH", "EXECUTE", "EXTERNAL", "FOR",
-		"FROM", "FUNCTION", "IMMEDIATE", "IMMUTABLE", "INITIALLY", "INPUT",
-		"INSERT", "INSTEAD", "INVOKER", "LANGUAGE", "LEAKPROOF", "NEW", "NOT",
-		"NULL", "OF", "OLD", "ON", "OR", "PARALLEL", "PROCEDURE",
-		"REFERENCING", "REPLACE", "RESTRICTED", "RETURNS", "ROW", "ROWS",
-		"SAFE", "SECURITY", "SET", "SETOF", "STABLE", "STATEMENT", "STRICT",
-		"SUPPORT", "TABLE", "TO", "TRANSFORM", "TRIGGER", "TRUNCATE", "TYPE",
-		"UNSAFE", "UPDATE", "VOLATILE", "WHEN", "WINDOW"}
 
 	var psLabels = []string{"TYPE", "NAME", "SIGNATURE", "RETURNS", "LANGUAGE",
 		"TRANSFORM", "WINDOW", "VOLATILE", "LEAKPROOF", "CALLING MODE",
@@ -740,25 +798,6 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 		case "FUNCTION", "PROCEDURE", "TRIGGER", "DO":
 			if objType == "" {
 				objType = ctVal
-			}
-		}
-
-		// Update keyword capitalization as needed
-		// Identifiers should have been properly cased in cleanupParsed
-		if cTok.IsKeyword() {
-			cTok.SetKeywordCase(e, ucKw)
-		}
-		switch ctVal {
-		case "DO", "SAFE", "UNSAFE", "IS", "DISTINCT":
-			cTok.SetKeywordCase(e, []string{ctVal})
-		}
-
-		// check for language
-		switch pNcVal {
-		case "LANGUAGE":
-			switch ctVal {
-			case "SQL", "C":
-				cTok.SetUpper()
 			}
 		}
 
