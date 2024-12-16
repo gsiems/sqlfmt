@@ -128,6 +128,32 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 		tType := cTok.Type()
 		tCategory := cTok.Category()
 
+		if tType == parser.WhiteSpace {
+			// We just don't care about the trailing whitespace
+			continue
+		}
+
+		switch tCategory {
+		case parser.Datatype, parser.Identifier, parser.Keyword:
+			switch strings.ToUpper(tText) {
+			case "WITH", "WITHOUT":
+				// look ahead for "TIME ZONE" and combine things if found
+				if idx+2 <= idxMax {
+					tp1 := strings.ToUpper(parsed[idx+1].Value())
+					tp2 := strings.ToUpper(parsed[idx+2].Value())
+
+					if tp1 == "TIME" && tp2 == "ZONE" {
+
+						tText = strings.ToLower(tText) + " time zone"
+						tType = parser.Datatype
+						tCategory = parser.Datatype
+
+						idx += 2
+					}
+				}
+			}
+		}
+
 		switch tCategory {
 		case parser.Identifier:
 
@@ -258,8 +284,8 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 		case ")":
 			parensDepth--
 		default:
-			switch {
-			case cTok.IsBag():
+			switch cTok.typeOf {
+			case DMLBag, DMLCaseBag, PLxBag, PLxBody:
 				AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
 			}
 		}
