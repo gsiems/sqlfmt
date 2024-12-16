@@ -263,7 +263,9 @@ func (t *FmtToken) String() string {
 	cName := nameOf(t.categoryOf)
 	tName := nameOf(t.typeOf)
 
-	return fmt.Sprintf("%6d %-12s: %-12s (%2d, %2d, %2d) (%2d %2d) [%s]",
-		t.id, cName, tName, t.vSpace, t.indents, len(t.hSpace),
-		t.vSpaceOrig, len(t.hSpaceOrig), t.value)
+	return fmt.Sprintf("%6d %-12s: %-14s (%2d, %2d, %2d) (%2d %2d) [%s]",
+		t.id, cName, tName,
+		t.vSpace, t.indents, len(t.hSpace),
+		t.vSpaceOrig, len(t.hSpaceOrig),
+		t.value)
 }
