@@ -902,7 +902,7 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 				}
 
 				switch sn {
-				case "SIGNATURE":
+				case "SIGNATURE", "RETURNS":
 					if parensDepth == 1 {
 						switch pNcVal {
 						case "(", ",":
