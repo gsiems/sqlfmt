@@ -409,7 +409,7 @@ func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) str
 	return paramLabel
 }
 
-func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) ([]FmtToken) {
+func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 
 	switch e.KeywordCase() {
 	case env.UpperCase:
@@ -434,7 +434,7 @@ func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) ([]FmtToken) {
 			"RAISE", "REFRESH", "RETURN", "SETOF", "THEN", "VIEW", "WHEN",
 			"WHILE":
 
-//"SQLERRM", "SQLSTATE", "STACKED", "DIAGNOSTICS",
+			//"SQLERRM", "SQLSTATE", "STACKED", "DIAGNOSTICS",
 
 			cTok.SetUpper()
 		case "NOTICE", "WARNING":
@@ -453,7 +453,7 @@ func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) ([]FmtToken) {
 	return ret
 }
 
-func formatPgPLNonBodyKeywords(e *env.Env, tokens []FmtToken) ([]FmtToken) {
+func formatPgPLNonBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 
 	switch e.KeywordCase() {
 	case env.UpperCase:
@@ -553,6 +553,19 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		honorVSpace := idx == 0
 		ensureVSpace := false
 
+		// get the next non-comment token...
+		//var nNcTok FmtToken
+		var nNcVal string
+
+		if idx+1 < idxMax {
+			for j := idx + 1; j <= idxMax; j++ {
+				if !line[j].IsCodeComment() {
+					nNcVal = line[j].AsUpper()
+					break
+				}
+			}
+		}
+
 		// Determine if a new-line should be applied before specific tokens
 		switch ctVal {
 		case "BEGIN", "BREAK", "CALL", "CLOSE", "CONTINUE", "DECLARE",
@@ -644,11 +657,19 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		// original white-space.
 		switch {
 		case cTok.IsCodeComment(), cTok.IsLabel(), cTok.IsBag():
-			ensureVSpace = false
 			honorVSpace = true
-		case pTok.IsCodeComment(), pTok.IsLabel(), pTok.IsBag():
-			ensureVSpace = false
+		case pTok.IsCodeComment(), pTok.IsLabel():
 			honorVSpace = true
+		case pTok.IsBag():
+
+			switch ctVal {
+			case ")":
+				if nNcVal != "LOOP" {
+					honorVSpace = true
+				}
+			default:
+				honorVSpace = true
+			}
 		}
 
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
@@ -731,20 +752,23 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 	}
 
 	var newLines [][]FmtToken
-	var newLine []FmtToken
+	newLines = append(newLines, tFormatted)
+	/*
+		var newLine []FmtToken
 
-	for _, cTok := range tFormatted {
-		if cTok.vSpace > 0 {
-			if len(newLine) > 0 {
-				newLines = append(newLines, newLine)
-				newLine = nil
+		for _, cTok := range tFormatted {
+			if cTok.vSpace > 0 {
+				if len(newLine) > 0 {
+					newLines = append(newLines, newLine)
+					newLine = nil
+				}
 			}
+			newLine = append(newLine, cTok)
 		}
-		newLine = append(newLine, cTok)
-	}
-	if len(newLine) > 0 {
-		newLines = append(newLines, newLine)
-	}
+		if len(newLine) > 0 {
+			newLines = append(newLines, newLine)
+		}
+	*/
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
@@ -967,20 +991,23 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 	}
 
 	var newLines [][]FmtToken
-	var newLine []FmtToken
+	newLines = append(newLines, tFormatted)
+	/*
+		var newLine []FmtToken
 
-	for _, cTok := range tFormatted {
-		if cTok.vSpace > 0 {
-			if len(newLine) > 0 {
-				newLines = append(newLines, newLine)
-				newLine = nil
+		for _, cTok := range tFormatted {
+			if cTok.vSpace > 0 {
+				if len(newLine) > 0 {
+					newLines = append(newLines, newLine)
+					newLine = nil
+				}
 			}
+			newLine = append(newLine, cTok)
 		}
-		newLine = append(newLine, cTok)
-	}
-	if len(newLine) > 0 {
-		newLines = append(newLines, newLine)
-	}
+		if len(newLine) > 0 {
+			newLines = append(newLines, newLine)
+		}
+	*/
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
