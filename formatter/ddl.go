@@ -95,6 +95,8 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			switch ctVal {
 			case "CREATE", "ALTER", "DROP":
 				openBag = true
+			case "IMPORT":
+				openBag = e.Dialect() == dialect.PostgreSQL
 			}
 		}
 
@@ -343,13 +345,10 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	parensDepth := 0
 
 	ddlAction := ""
-	//objType := ddlObjType(e, line)
+	objType := ddlObjType(e, line)
 
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
-
-	//var ucKw = []string{
-	//}
 
 	for idx := 0; idx <= idxMax; idx++ {
 
@@ -358,7 +357,7 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 		if ddlAction == "" {
 			switch ctVal {
-			case "CREATE", "ALTER", "DROP":
+			case "CREATE", "ALTER", "DROP", "IMPORT":
 				ddlAction = ctVal
 			}
 		}
@@ -376,8 +375,25 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		// Determine the indentation level
 		indents := baseIndents + parensDepth
 
-		if idx > 0 && cTok.vSpace > 0 {
-			indents = max(indents, 1)
+		switch {
+		case cTok.vSpace == 0:
+			// nada
+		case idx == 0:
+		// nada
+		case ctVal == ")":
+			indents = max(indents-1, 1)
+		default:
+			switch ddlAction {
+			case "CREATE":
+				switch objType {
+				case "VIEW", "MATERIALIZED VIEW":
+				// nada
+				default:
+					indents++
+				}
+			default:
+				indents++
+			}
 		}
 
 		if cTok.vSpace > 0 {
@@ -410,20 +426,23 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	}
 
 	var newLines [][]FmtToken
-	var newLine []FmtToken
+	newLines = append(newLines, tFormatted)
+	/*
+		var newLine []FmtToken
 
-	for _, cTok := range tFormatted {
-		if cTok.vSpace > 0 {
-			if len(newLine) > 0 {
-				newLines = append(newLines, newLine)
-				newLine = nil
+		for _, cTok := range tFormatted {
+			if cTok.vSpace > 0 {
+				if len(newLine) > 0 {
+					newLines = append(newLines, newLine)
+					newLine = nil
+				}
 			}
+			newLine = append(newLine, cTok)
 		}
-		newLine = append(newLine, cTok)
-	}
-	if len(newLine) > 0 {
-		newLines = append(newLines, newLine)
-	}
+		if len(newLine) > 0 {
+			newLines = append(newLines, newLine)
+		}
+	*/
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, newLines)
