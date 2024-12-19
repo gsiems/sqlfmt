@@ -2,6 +2,7 @@ package formatter
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/gsiems/sqlfmt/dialect"
@@ -10,6 +11,7 @@ import (
 
 const (
 	compareOps = iota + 400
+	concatOps
 	logicOps
 	mathOps
 )
@@ -283,31 +285,31 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 	case DMLCaseBag:
 		wrapDMLCase(e, bagMap, bagType, bagId, defIndents)
 	}
+	/*
+		for _, line := range b.lines {
+			if len(line) == 0 {
+				continue
+			}
 
-	for _, line := range b.lines {
-		if len(line) == 0 {
-			continue
-		}
+			parensDepth := 0
+			initIndents := max(defIndents, line[0].indents)
 
-		parensDepth := 0
-		initIndents := max(defIndents, line[0].indents)
-
-		switch line[0].AsUpper() {
-		case "SELECT":
-			initIndents += 2
-		}
-		for _, cTok := range line {
-			switch {
-			case cTok.value == "(":
-				parensDepth++
-			case cTok.value == ")":
-				parensDepth--
-			case cTok.typeOf == DMLCaseBag:
-				AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth)
+			switch line[0].AsUpper() {
+			case "SELECT":
+				initIndents += 2
+			}
+			for _, cTok := range line {
+				switch {
+				case cTok.value == "(":
+					parensDepth++
+				case cTok.value == ")":
+					parensDepth--
+				case cTok.typeOf == DMLCaseBag:
+					AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth)
+				}
 			}
 		}
-	}
-
+	*/
 	// wrap IN
 	// comp_ops   "=", "==", "<", ">", "<>", "!=", ">=", "<="
 	// math_ops   "+", "-", "*", "/"
@@ -315,16 +317,21 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 	// logic_ops  "AND", "OR"
 	// start at parensDepth == 0, increment and re-run as needed
 
-	for pdl := 1; pdl <= 5; pdl++ {
-		wrapPlCalls(e, bagMap, bagType, bagId, defIndents, pdl)
-	}
-
 	for pdl := 0; pdl <= 5; pdl++ {
 
 		//wrapCsv(e, bagMap, bagType, bagId, defIndents, pdl)
 
-		//wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, logicOps)
+		wrapCsv2(e, bagMap, bagType, bagId, defIndents, pdl)
 
+		//wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, logicOps)
+		//wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, concatOps)
+
+		//wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, compareOps)
+		//wrapOps(e, bagMap, bagType, bagId, defIndents, pdl, mathOps)
+	}
+
+	for pdl := 1; pdl <= 5; pdl++ {
+		wrapPlCalls(e, bagMap, bagType, bagId, defIndents, pdl)
 	}
 
 	for _, line := range b.lines {
@@ -333,12 +340,9 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 		}
 
 		parensDepth := 0
-		initIndents := max(defIndents, line[0].indents)
+		initIndents := calcIndents(bagType, parensDepth, line[0])
+		initIndents = max(defIndents, line[0].indents)
 
-		switch line[0].AsUpper() {
-		case "SELECT":
-			initIndents += 2
-		}
 		for _, cTok := range line {
 			switch {
 			case cTok.value == "(":
@@ -356,6 +360,13 @@ func AdjustLineWrapping(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, 
 
 func max(a, b int) int {
 	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
 		return a
 	}
 	return b
@@ -385,6 +396,51 @@ func calcLineLen(e *env.Env, bagMap map[string]TokenBag, tokens []FmtToken) int 
 		lineLen += tokenLen(e, bagMap, cTok)
 	}
 	return lineLen
+}
+
+func lenToLineEnd(e *env.Env, bagMap map[string]TokenBag, tokens []FmtToken) (int, bool) {
+
+	lineLen := 0
+
+	if len(tokens) == 0 {
+		return 0, false
+	}
+
+	for idx, cTok := range tokens {
+		switch {
+		case cTok.vSpace > 0:
+			if idx > 0 {
+				return lineLen, true
+			} else {
+				lineLen += len(strings.Repeat(e.Indent(), cTok.indents)) + len(cTok.value)
+			}
+		case cTok.IsBag():
+			key := bagKey(cTok.typeOf, cTok.id)
+
+			b, ok := bagMap[key]
+			if !ok {
+				return 0, false
+			}
+
+			for _, line := range b.lines {
+				switch {
+				case len(line) == 0:
+					// nada
+				case line[0].vSpace > 0:
+					return lineLen, true
+				default:
+					tl, done := lenToLineEnd(e, bagMap, line)
+					lineLen += tl
+					if done {
+						return lineLen, done
+					}
+				}
+			}
+		default:
+			lineLen += len(cTok.hSpace) + len(cTok.value)
+		}
+	}
+	return lineLen, false
 }
 
 func tokenLen(e *env.Env, bagMap map[string]TokenBag, t FmtToken) int {
@@ -440,11 +496,7 @@ func wrapOps(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 		pKwVal := ""
 		parensDepth = 0
 
-		initIndents := line[0].indents
-
-		if line[0].AsUpper() == "SELECT" {
-			initIndents += 2
-		}
+		initIndents := calcIndents(bagType, parensDepth, line[0])
 		initIndents = max(initIndents, defIndents)
 
 		for idx := 0; idx <= idxMax; idx++ {
@@ -464,12 +516,16 @@ func wrapOps(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 				case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
 					matches = true
 				}
+			case concatOps:
+				switch cTok.value {
+				case "||":
+					matches = true
+				}
 			case mathOps:
 				switch cTok.value {
 				case "+", "-", "*", "/":
 					matches = true
 				}
-
 			case logicOps:
 				switch cTok.AsUpper() {
 				case "OR":
@@ -546,7 +602,7 @@ func wrapCsv(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 			continue
 		}
 
-		lineLen := calcLineLen(e, bagMap, line)
+		lineLen, _ := lenToLineEnd(e, bagMap, line)
 		tooLong := lineLen > e.MaxLineLength()
 
 		if !tooLong {
@@ -558,11 +614,7 @@ func wrapCsv(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 		pNcVal := ""
 		parensDepth := 0
 
-		initIndents := line[0].indents
-
-		if line[0].AsUpper() == "SELECT" {
-			initIndents += 2
-		}
+		initIndents := calcIndents(bagType, parensDepth, line[0])
 		initIndents = max(initIndents, defIndents)
 
 		cCnt := 0
@@ -625,16 +677,47 @@ func wrapCsv(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 			}
 		}
 
+		if len(csin) > 0 || len(csi) > 0 {
+			log.Printf("    len(cs*) %d %d", len(csin), len(csi))
+
+			for _, t := range pre {
+				log.Printf("        pre [%s]", t.value)
+			}
+
+			for _, t := range post {
+				log.Printf("        post [%s]", t.value)
+			}
+		}
+
 		switch {
 		case len(csin) > 0:
 
 			var acc []FmtToken
 			acc = append(acc, pre...)
-			cumLen := calcLineLen(e, bagMap, pre)
+			cumLen, _ := lenToLineEnd(e, bagMap, pre)
 
 			for i := 0; i < len(csin); i++ {
 				cTok := csin[i]
-				cumLen += tokenLen(e, bagMap, cTok)
+
+				tl := 0
+				switch {
+				case cTok.IsBag():
+
+					key := bagKey(cTok.typeOf, cTok.id)
+
+					b, ok := bagMap[key]
+					if ok {
+						if len(b.lines) > 0 {
+							tl, _ = lenToLineEnd(e, bagMap, b.lines[0])
+
+						}
+					}
+
+				default:
+					tl = tokenLen(e, bagMap, cTok)
+				}
+
+				cumLen += tl
 
 				switch {
 				case cTok.value == ",":
@@ -642,19 +725,20 @@ func wrapCsv(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 
 				case cumLen >= e.MaxLineLength():
 					newLines = append(newLines, acc)
-					acc = nil
 					isDirty = true
 					cTok.EnsureVSpace()
 					cTok.AdjustIndents(initIndents + max(pdl, 1))
+
+					acc = nil
 					acc = append(acc, cTok)
-					cumLen = tokenLen(e, bagMap, cTok)
+					cumLen = tl
 
 				default:
 					acc = append(acc, cTok)
 				}
 			}
 
-			postLen := calcLineLen(e, bagMap, post)
+			postLen, _ := lenToLineEnd(e, bagMap, post)
 
 			switch {
 			case cumLen+postLen == 0:
@@ -701,8 +785,8 @@ func wrapCsv(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents,
 					// The last line
 					cToks[0].EnsureVSpace()
 					cToks[0].AdjustIndents(initIndents + max(pdl, 1))
-					cLen := calcLineLen(e, bagMap, cToks)
-					postLen := calcLineLen(e, bagMap, post)
+					cLen, _ := lenToLineEnd(e, bagMap, cToks)
+					postLen, _ := lenToLineEnd(e, bagMap, post)
 
 					switch {
 					case cLen+postLen == 0:
@@ -792,6 +876,16 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 		return
 	}
 
+	/*
+	   log.Print("#########################################################")
+	   		for _, line := range b.lines {
+	   			for _, t := range line {
+	   				ts := t.String()
+	   				log.Printf("%6d: %s", bagId, ts)
+	   			}
+	   		}
+	*/
+
 	var newLines [][]FmtToken
 	var newLine []FmtToken
 
@@ -818,21 +912,31 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 	var others []int
 	var whens [][]FmtToken
 	var when []FmtToken
-
+	/*
+	   log.Print("#########################################################")
+	*/
 	for _, line := range b.lines {
 		if len(line) == 0 {
 			continue
 		}
 
 		// Determine if the indentation needs adjusting
-		if initIndents == 0 {
-			initIndents = line[0].indents
-			if initIndents < defIndents {
-				initIndents = defIndents
-			}
-			indentDelta = initIndents - line[0].indents
-		}
+		initIndents = max(line[0].indents, defIndents)
+		indentDelta = initIndents - line[0].indents
+		/*
+		   log.Printf(" %d   line[0].indents: %d, defIndents: %d, initIndents: %d, indentDelta: %d",
+		   	bagId, line[0].indents, defIndents, initIndents, indentDelta)
+		*/
 
+		/*
+			if initIndents == 0 {
+				initIndents = line[0].indents
+				if initIndents < defIndents {
+					initIndents = defIndents
+				}
+				indentDelta = initIndents - line[0].indents
+			}
+		*/
 		caseLen += calcLineLen(e, bagMap, line)
 
 		// Get some stats for determining if, and how, the CASE statement needs wrapping
@@ -865,6 +969,12 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 		}
 	}
 
+	/*
+	   log.Print("#########################################################")
+	   log.Printf(" %d   wCount: %d, len(whens): %d, oCountMax: %d, sbCount: %d, caseLen: %d, bagLenMax: %d, len(b.lines): %d, indentDelta: %d",
+	   	bagId, wCount, len(whens), oCountMax, sbCount, caseLen, bagLenMax, len(b.lines), indentDelta)
+	*/
+
 	// Determine if the CASE statement needs wrapping
 	switch {
 	case wCount+oCountMax > 2:
@@ -888,7 +998,7 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 		// Adjust the wrapping and indentation
 		var pTok FmtToken
 
-		whenI = 0
+		whenI = 1
 		for _, line := range b.lines {
 
 			if len(line) == 0 {
@@ -909,24 +1019,45 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 				case ")":
 					parensDepth--
 				case "CASE":
-					if cTok.vSpace > 0 {
+					if cVspace > 0 {
 						cIndents = initIndents + parensDepth
 					}
 				case "WHEN", "ELSE":
 					cVspace = 1
 					cIndents = initIndents + parensDepth + 1
-					if whenI <= len(whens)-1 {
+					/*
+					   log.Printf(" %d   [%s] whenI: %d, id: %d, cVspace: %d, cIndents: %d",
+					   	bagId, cTok.AsUpper(), whenI, cTok.id, cVspace, cIndents)
+					*/
+					if whenI < len(whens)-1 {
 						when := whens[whenI]
 						when[0].EnsureVSpace() // pretend that this is a line
 						when[0].AdjustIndents(initIndents + parensDepth + 1)
 						whenLen = calcLineLen(e, bagMap, when) + bagLens[whenI]
 						oCount = others[whenI]
+
+						/*
+							for _, t := range when {
+								log.Printf(" %d      %6d %d %s", bagId, cTok.id, whenI, t.String())
+							}
+						*/
 					}
+					/*
+					   log.Printf(" %d      whenLen: %d", bagId, whenLen)
+					*/
+
 					whenI++
 
 				case "THEN":
+					/*
+					   log.Printf(" %d   [%s] ID: %d, whenLen: %d, cVspace: %d, cIndents: %d",
+					   	bagId, cTok.AsUpper(), cTok.id, whenLen, cVspace, cIndents)
+					*/
+
 					if whenLen > e.MaxLineLength() {
 						cVspace = 1
+						cIndents = initIndents + parensDepth + 2
+					} else if cVspace > 0 {
 						cIndents = initIndents + parensDepth + 2
 					}
 				case "AND", "OR":
@@ -944,7 +1075,9 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 					case cTok.IsBag():
 						AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, initIndents+parensDepth+2)
 					case cTok.IsCodeComment(), pTok.IsCodeComment():
-					// nada
+						if cVspace > 0 {
+							cIndents = initIndents + parensDepth + 2
+						}
 					default:
 						cVspace = 0
 						cIndents = 0
@@ -1005,10 +1138,460 @@ func wrapDMLCase(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 	}
 }
 
+func isOp(opsType int, op, pKwVal string) bool {
+
+	var ops []string
+
+	switch opsType {
+	case compareOps:
+		ops = []string{"=", "==", "<", ">", "<>", "!=", ">=", "<="}
+	case concatOps:
+		ops = []string{"||"}
+	case mathOps:
+		ops = []string{"+", "-", "*", "/"}
+	case logicOps:
+		switch strings.ToUpper(op) {
+		case "OR":
+			switch strings.ToUpper(pKwVal) {
+			case "CREATE":
+			// nada
+			default:
+				return true
+			}
+		case "AND":
+			switch strings.ToUpper(pKwVal) {
+			case "BETWEEN", "PRECEDING", "FOLLOWING", "ROW":
+			// nada
+			default:
+				return true
+			}
+		}
+	}
+
+	if len(ops) > 0 {
+		for _, v := range ops {
+			if op == v {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func wrapOps2(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents, pdl, opsType int) {
+	return
+
+	if pdl == 0 {
+		return
+	}
+
+	key := bagKey(bagType, bagId)
+
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
+
+	if len(b.lines) == 0 {
+		return
+	}
+
+	isDirty := false
+	parensDepth := 0
+	pKwVal := ""
+
+	var newLines [][]FmtToken
+
+	for _, line := range b.lines {
+		if len(line) == 0 {
+			continue
+		}
+
+		opCnt := 0 // count of operators
+
+		var newLine []FmtToken
+		for _, cTok := range line {
+			newLine = append(newLine, cTok)
+
+			switch cTok.value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			default:
+				tst := isOp(opsType, cTok.value, pKwVal)
+				if tst {
+					//log.Printf("   isOp(%d, %q, %q) == %t", opsType, cTok.value, pKwVal, tst)
+					opCnt++
+				}
+			}
+
+		}
+
+		//log.Printf("   opCnt: %d", opCnt)
+
+		if opCnt > 0 {
+
+			log.Printf("%d    opCnt: %d, defIndents: %d, pdl: %d", bagId, opCnt, defIndents, pdl)
+
+			indents := defIndents
+			idStart := 0
+			opCnt = 0  // Count of operators
+			lnCnt := 0 // Count of new lines
+			lineLen := 0
+			pKwVal := ""
+
+			for idx := 0; idx < len(newLine); idx++ {
+
+				// If we are at the start of a new line then determine the
+				// indentation for line wrapping and also scan ahead to
+				// determine the length of the line
+				if newLine[idx].vSpace > 0 {
+
+					setIndents := false
+					switch pdl {
+					case 0:
+						setIndents = parensDepth == pdl
+					default:
+						setIndents = parensDepth < pdl
+					}
+
+					if setIndents {
+						indents = calcIndents(bagType, parensDepth, newLine[idx])
+					}
+					lineLen, _ = lenToLineEnd(e, bagMap, newLine[idx:])
+
+					log.Printf("%d        indents: %d, lineLen: %d", newLine[idx].id, indents, lineLen)
+
+				}
+
+				addBreaks := false
+
+				switch newLine[idx].value {
+				case "(":
+					parensDepth++
+					indents++
+					if parensDepth == pdl {
+						idStart = idx
+					}
+				case ")":
+					if parensDepth == pdl {
+
+						switch {
+						case opCnt <= 1:
+						// nada
+						case opCnt > 1:
+							addBreaks = true
+						case lnCnt > 0:
+							addBreaks = true
+						case lineLen >= e.MaxLineLength():
+							addBreaks = true
+						}
+
+						log.Printf("%d            (%d - %d) opCnt: %d, lnCnt: %d, lineLen: %d, addBreaks: %t", newLine[idx].id, idStart, idx, opCnt, lnCnt, lineLen, addBreaks)
+
+						if !addBreaks {
+							idStart = 0
+							opCnt = 0
+							lnCnt = 0
+						}
+					}
+					indents--
+					parensDepth--
+
+				default:
+
+					if pdl == 0 {
+						if newLine[idx].vSpace > 0 {
+							if idStart == 0 {
+								idStart = idx
+							}
+							if idx > idStart {
+								switch {
+								case opCnt <= 1:
+								// nada
+								case opCnt > 1:
+									addBreaks = true
+								case lnCnt > 0:
+									addBreaks = true
+								case lineLen >= e.MaxLineLength():
+									addBreaks = true
+								}
+							}
+
+						}
+
+					}
+
+					tst := isOp(opsType, newLine[idx].value, pKwVal)
+
+					if parensDepth == pdl {
+						if tst {
+							opCnt++
+						}
+						if newLine[idx].vSpace > 0 {
+							lnCnt++
+						}
+					}
+					if tst {
+						log.Printf("%d                isOp: %t - parensDepth: %d, pdl: %d, opCnt: %d, lnCnt: %d", newLine[idx].id, tst, parensDepth, pdl, opCnt, lnCnt)
+					}
+				}
+
+				if addBreaks {
+					isDirty = true
+					tpd := pdl
+					tpi := indents
+					pkv := pKwVal
+
+					for i := idStart + 1; i < idx; i++ {
+						if newLine[i].value == "(" {
+							tpd++
+							tpi++
+						}
+
+						if tpd == pdl {
+							if isOp(opsType, newLine[i].value, pkv) {
+								newLine[i].EnsureVSpace()
+								newLine[i].AdjustIndents(tpi)
+							} else {
+								if newLine[i].vSpace > 0 {
+									newLine[i].AdjustIndents(tpi)
+								}
+							}
+						}
+
+						if newLine[i].value == ")" {
+							tpd--
+							tpi--
+						}
+
+						if newLine[i].IsKeyword() {
+							pkv = newLine[i].value
+						}
+					}
+					idStart = 0
+					opCnt = 0
+					lnCnt = 0
+				}
+
+				if newLine[idx].IsKeyword() {
+					pKwVal = newLine[idx].value
+				}
+
+			}
+		}
+		newLines = append(newLines, newLine)
+	}
+
+	if isDirty {
+		UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	}
+}
+
+func calcIndents(bagType, parensDepth int, cTok FmtToken) int {
+
+	indents := cTok.indents + parensDepth
+
+	if bagType == DMLBag {
+		switch cTok.AsUpper() {
+		case "SELECT":
+			indents += 2
+		case "FROM", "WHERE", "GROUP", "HAVING", "WINDOW",
+			"ORDER", "OFFSET", "LIMIT", "FETCH", "FOR", "WITH",
+			"RETURNING", "CROSS", "FULL", "INNER", "JOIN",
+			"LATERAL", "LEFT", "NATURAL", "OUTER", "RIGHT",
+			"VALUES":
+			indents++
+		}
+	}
+	return indents
+}
+
+func wrapCsv2(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents, pdl int) {
+
+	if pdl == 0 {
+		return
+	}
+
+	// do not perform for "COMMENT ON...", "ALTER...", or "CREATE..."
+	switch bagType {
+	case DCLBag, DDLBag, CommentOnBag:
+		return
+	}
+
+	// if json_build_object then wrap every second comma
+
+	key := bagKey(bagType, bagId)
+
+	b, ok := bagMap[key]
+	if !ok {
+		return
+	}
+
+	if len(b.lines) == 0 {
+		return
+	}
+
+	isDirty := false
+	parensDepth := 0
+	pNcVal := ""
+
+	var newLines [][]FmtToken
+
+	for _, line := range b.lines {
+		if len(line) == 0 {
+			continue
+		}
+
+		cCnt := 0 // count of "fat-commas"
+
+		var newLine []FmtToken
+		for _, cTok := range line {
+			newLine = append(newLine, cTok)
+
+			switch cTok.value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			case ",":
+				if parensDepth == pdl {
+					cCnt++
+				}
+			}
+		}
+
+		if cCnt > 0 {
+
+			indents := defIndents
+			idStart := 0
+			cCnt = 0   // Count of "fat-commas"
+			lnCnt := 0 // Count of new lines
+			lineLen := 0
+			isIn := false
+
+			for idx := 0; idx < len(newLine); idx++ {
+
+				// If we are at the start of a new line then determine the
+				// indentation for line wrapping and also scan ahead to
+				// determine the length of the line
+				if newLine[idx].vSpace > 0 {
+
+					setIndents := false
+					switch pdl {
+					case 0:
+						setIndents = parensDepth == pdl
+					default:
+						setIndents = parensDepth < pdl
+					}
+
+					if setIndents {
+						indents = calcIndents(bagType, parensDepth, newLine[idx])
+					}
+					lineLen, _ = lenToLineEnd(e, bagMap, newLine[idx:])
+				}
+
+				switch newLine[idx].value {
+				case "(":
+					parensDepth++
+					indents++
+					if parensDepth == pdl {
+						idStart = idx
+						if pNcVal == "IN" {
+							isIn = true
+						}
+					}
+				case ")":
+					if parensDepth == pdl {
+
+						addBreaks := false
+						switch {
+						case isIn:
+							// nada
+						case lineLen < e.MaxLineLength():
+							// nada
+						case cCnt <= 1:
+						// nada
+						case cCnt > 1:
+							addBreaks = true
+						case lnCnt > 0:
+							addBreaks = true
+						}
+
+						if addBreaks {
+							isDirty = true
+							tpd := pdl
+							tpi := indents
+
+							pnv := newLine[idStart].value
+
+							for i := idStart + 1; i < idx; i++ {
+								if newLine[i].value == "(" {
+									tpd++
+									tpi++
+								}
+
+								if tpd == pdl {
+									switch pnv {
+									case "(", ",":
+										newLine[i].EnsureVSpace()
+										newLine[i].AdjustIndents(tpi)
+									default:
+										if newLine[i].vSpace > 0 {
+											newLine[i].AdjustIndents(tpi)
+										}
+									}
+								}
+
+								if newLine[i].value == ")" {
+									tpd--
+									tpi--
+								}
+								if !newLine[i].IsCodeComment() {
+									pnv = newLine[i].value
+								}
+							}
+						}
+						idStart = 0
+						cCnt = 0
+						lnCnt = 0
+						isIn = false
+					}
+					indents--
+					parensDepth--
+				case ",":
+					if parensDepth == pdl {
+						cCnt++
+					}
+				default:
+					if newLine[idx].vSpace > 0 {
+						if parensDepth == pdl {
+							lnCnt++
+						}
+					}
+				}
+
+				if !newLine[idx].IsCodeComment() {
+					pNcVal = newLine[idx].value
+				}
+
+			}
+
+		}
+		newLines = append(newLines, newLine)
+	}
+
+	if isDirty {
+		UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	}
+}
+
 func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defIndents, pdl int) {
 
-	// Note that it is possible for a line to contain multiple PL calls
-	// and/or nested PL calls
+	// Note that it is possible for a line of code to contain multiple PL calls
+	// and/or for a PL call to contain nested PL calls
 	// For example:
 	//
 	//   select coalesce ( func_01 ( ... ), func_02 ( ... ) ) ;
@@ -1017,15 +1600,6 @@ func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 	//           param_1 => 1,
 	//           param_2 => func_02 ( ... ),
 	//           param_3 => 42 ) ;
-	//
-	// In the case of nested calls we can use parens depth to differentiate the
-	// PL calls, but that won't work for multiple non-nested calls.
-	//
-	// Open parens count, on the other hand, should work for sequential calls
-	// but not so well for nested calls.
-
-	// TODO: Much like DML case statements, we may want/need to tag pl
-	// function/procedure calls that use named parameters as separate bags.
 
 	key := bagKey(bagType, bagId)
 
@@ -1045,32 +1619,23 @@ func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 		return
 	}
 
-	pNcVal := ""
 	isDirty := false
 	parensDepth := 0
 
 	var newLines [][]FmtToken
-	var newLine []FmtToken
 
 	for _, line := range b.lines {
 		if len(line) == 0 {
 			continue
 		}
 
-		idxMax := len(line) - 1
-
-		// Determine if the indentation needs adjusting
-		initIndents := line[0].indents
-
-		if line[0].AsUpper() == "SELECT" {
-			initIndents += 2
-		}
-		initIndents = max(initIndents, defIndents)
-
 		fcCnt := 0 // count of "fat-commas"
 
-		for idx := 0; idx <= idxMax; idx++ {
-			switch line[idx].value {
+		var newLine []FmtToken
+		for _, cTok := range line {
+			newLine = append(newLine, cTok)
+
+			switch cTok.value {
 			case "(":
 				parensDepth++
 			case ")":
@@ -1082,68 +1647,110 @@ func wrapPlCalls(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, defInde
 			}
 		}
 
-		if fcCnt < 3 {
-			newLines = append(newLines, line)
-			continue
-		}
+		if fcCnt > 0 {
 
-		for idx := 0; idx <= idxMax; idx++ {
+			indents := defIndents
+			idStart := 0
+			fcCnt = 0  // Count of "fat-commas"
+			lnCnt := 0 // Count of new lines
+			lineLen := 0
 
-			cTok := line[idx]
-			ctVal := cTok.AsUpper()
+			for idx := 0; idx < len(newLine); idx++ {
 
-			switch ctVal {
-			case "(":
-				parensDepth++
-			case ")":
-				parensDepth--
-			}
+				// If we are at the start of a new line then determine the
+				// indentation for line wrapping and also scan ahead to
+				// determine the length of the line
+				if newLine[idx].vSpace > 0 {
 
-			switch pNcVal {
-			case ",", "(":
+					setIndents := false
+					switch pdl {
+					case 0:
+						setIndents = parensDepth == pdl
+					default:
+						setIndents = parensDepth < pdl
+					}
 
-				breakLine := false
-				if idx+1 < idxMax {
-					for j := idx + 1; j <= idxMax; j++ {
+					if setIndents {
+						indents = calcIndents(bagType, parensDepth, newLine[idx])
+					}
+					lineLen, _ = lenToLineEnd(e, bagMap, newLine[idx:])
+				}
+
+				switch newLine[idx].value {
+				case "(":
+					parensDepth++
+					indents++
+					if parensDepth == pdl {
+						idStart = idx
+					}
+				case ")":
+					if parensDepth == pdl {
+
+						addBreaks := false
 						switch {
-						case line[j].IsCodeComment():
+						case fcCnt <= 1:
 						// nada
-						case line[j].value == "=>":
-							if parensDepth == pdl {
-								breakLine = true
-								break
+						case fcCnt > 1:
+							addBreaks = true
+						case lnCnt > 0:
+							addBreaks = true
+						case lineLen >= e.MaxLineLength():
+							addBreaks = true
+						}
+
+						if addBreaks {
+							isDirty = true
+							tpd := pdl
+							tpi := indents
+
+							pNcVal := newLine[idStart].value
+
+							for i := idStart + 1; i < idx; i++ {
+								if newLine[i].value == "(" {
+									tpd++
+									tpi++
+								}
+
+								if tpd == pdl {
+									switch pNcVal {
+									case "(", ",":
+										newLine[i].EnsureVSpace()
+										newLine[i].AdjustIndents(tpi)
+									default:
+										if newLine[i].vSpace > 0 {
+											newLine[i].AdjustIndents(tpi)
+										}
+									}
+								}
+
+								if newLine[i].value == ")" {
+									tpd--
+									tpi--
+								}
+								if !newLine[i].IsCodeComment() {
+									pNcVal = newLine[i].value
+								}
 							}
-						default:
-							break
+						}
+						idStart = 0
+						fcCnt = 0
+						lnCnt = 0
+					}
+					indents--
+					parensDepth--
+				case "=>":
+					if parensDepth == pdl {
+						fcCnt++
+					}
+				default:
+					if newLine[idx].vSpace > 0 {
+						if parensDepth == pdl {
+							lnCnt++
 						}
 					}
 				}
-
-				if breakLine {
-					isDirty = true
-					if len(newLine) > 0 {
-						newLines = append(newLines, newLine)
-						newLine = nil
-						cTok.EnsureVSpace()
-						cTok.AdjustIndents(initIndents + parensDepth)
-					}
-				}
 			}
-
-			if !cTok.IsCodeComment() {
-				pNcVal = ctVal
-			}
-
-			newLine = append(newLine, cTok)
 		}
-
-		if len(newLine) > 0 {
-			newLines = append(newLines, newLine)
-			newLine = nil
-		}
-	}
-
-	if len(newLine) > 0 {
 		newLines = append(newLines, newLine)
 	}
 
