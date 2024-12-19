@@ -418,7 +418,7 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	return remainder
 }
 
-func formatDMLKeywords(e *env.Env, tokens []FmtToken) ([]FmtToken) {
+func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 
 	switch e.KeywordCase() {
 	case env.UpperCase:
@@ -728,7 +728,12 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		switch cat.currentClause() {
 		case "WITH":
 			if ctVal == ")" {
-				ensureVSpace = true
+				switch pKwVal {
+				case "RECURSIVE":
+					// nada
+				default:
+					ensureVSpace = true
+				}
 			}
 		case "VALUES":
 			switch ctVal {
@@ -765,13 +770,22 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			}
 		}
 
-		switch {
-		case cTok.IsCodeComment(), cTok.IsBag():
-			//ensureVSpace = false
-			honorVSpace = true
-		case pTok.IsCodeComment(), pTok.IsBag():
-			//ensureVSpace = false
-			honorVSpace = true
+		switch ctVal {
+		case ";":
+			switch pTok.IsCodeComment() {
+			case false:
+				ensureVSpace = false
+				honorVSpace = false
+			}
+		default:
+			switch {
+			case cTok.IsCodeComment(), cTok.IsBag():
+				//ensureVSpace = false
+				honorVSpace = true
+			case pTok.IsCodeComment(), pTok.IsBag():
+				//ensureVSpace = false
+				honorVSpace = true
+			}
 		}
 
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
@@ -791,8 +805,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					// nada
 				case ")":
 					localIndents = -1
-					//default:
-					//	localIndents = 1
 				}
 			case "SELECT":
 				switch ctVal {
@@ -832,6 +844,12 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 						localIndents = 2
 					case "VALUES":
 						localIndents = 2
+					case "ON":
+						if nNcVal == "CONFLICT" {
+							localIndents = 2
+						} else {
+							localIndents = 3
+						}
 					case ")":
 						localIndents = 2
 					default:
@@ -920,13 +938,41 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 		} // end cTok.vSpace > 0
 
-// using ( select
-// from ( select
-// ... ( select
-
 		switch {
 		case cTok.IsDMLBag(), cTok.IsDMLCaseBag():
-			formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
+			bagIndent := baseIndents + cat.parensDepth()
+			switch cat.primaryAction() {
+			case "WITH":
+			// nada
+			case "DELETE", "UPDATE":
+				bagIndent++
+			default:
+				switch cat.currentClause() {
+				case "SELECT", "WHERE", "GROUP", "ORDER":
+					bagIndent += 2
+				default:
+					bagIndent++
+				}
+			}
+			formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, bagIndent, ensureVSpace)
+			/*
+				switch {
+				case cat.primaryAction() == "WITH":
+					formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth(), ensureVSpace)
+				case cat.primaryAction() == "UPDATE", cat.primaryAction() == "DELETE":
+					formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth()+1, ensureVSpace)
+				case cat.currentClause() == "SELECT", cat.currentClause() == "WHERE":
+					formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth()+2, ensureVSpace)
+				default:
+					formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth()+1, ensureVSpace)
+				}
+			*/
+			//switch cat.parensDepth() {
+			//case 0:
+			//	formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+1, ensureVSpace)
+			//default:
+			//	formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth()+1, ensureVSpace)
+			//}
 		case cTok.IsBag():
 			switch {
 			case cat.primaryAction() == "WITH":
@@ -937,6 +983,25 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
 		}
 
+		/*
+				switch {
+				case cat.primaryAction() == "WITH":
+					indents = baseIndents + cat.parensDepth()
+				case cat.parensDepth() > 0:
+					indents++
+				}
+
+				formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
+			case cTok.IsBag():
+				switch {
+				case cat.primaryAction() == "WITH":
+					// nada
+				case cat.parensDepth() > 0:
+					indents++
+				}
+				formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
+			}
+		*/
 		////////////////////////////////////////////////////////////////
 		// Update the type and amount of white-space before the token
 		if cTok.vSpace > 0 {
@@ -989,20 +1054,23 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	}
 
 	var newLines [][]FmtToken
-	var newLine []FmtToken
+	newLines = append(newLines, tFormatted)
+	/*
+		var newLine []FmtToken
 
-	for _, cTok := range tFormatted {
-		if cTok.vSpace > 0 {
-			if len(newLine) > 0 {
-				newLines = append(newLines, newLine)
-				newLine = nil
+		for _, cTok := range tFormatted {
+			if cTok.vSpace > 0 {
+				if len(newLine) > 0 {
+					newLines = append(newLines, newLine)
+					newLine = nil
+				}
 			}
+			newLine = append(newLine, cTok)
 		}
-		newLine = append(newLine, cTok)
-	}
-	if len(newLine) > 0 {
-		newLines = append(newLines, newLine)
-	}
+		if len(newLine) > 0 {
+			newLines = append(newLines, newLine)
+		}
+	*/
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
