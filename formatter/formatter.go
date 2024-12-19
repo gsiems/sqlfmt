@@ -284,8 +284,7 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 		case ")":
 			parensDepth--
 		default:
-			switch cTok.typeOf {
-			case DMLBag, DMLCaseBag, PLxBag, PLxBody:
+			if cTok.IsBag() {
 				AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
 			}
 		}
