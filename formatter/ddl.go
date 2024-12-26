@@ -217,7 +217,7 @@ func ddlObjType(e *env.Env, tokens []FmtToken) string {
 
 		case "AGGREGATE", "CAST", "COLLATION", "COLUMN", "CONSTRAINT",
 			"CONVERSION", "DATABASE", "DOMAIN", "EXTENSION", "FUNCTION",
-			"INDEX", "LANGUAGE", "POLICY", "PROCEDURE",
+			"INDEX", "LANGUAGE", "PACKAGE", "POLICY", "PROCEDURE",
 			"PUBLICATION", "ROLE", "ROUTINE", "RULE", "SCHEMA", "SEQUENCE",
 			"SERVER", "STATISTICS", "SUBSCRIPTION", "TABLE", "TABLESPACE",
 			"TRIGGER", "TYPE", "VIEW":
@@ -299,7 +299,7 @@ func formatDDLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		}
 
 		switch ctVal {
-		case "AND", "OR", "NOT":
+		case "AND", "OR", "NOT", "NULL":
 			cTok.SetUpper()
 		case "IS", "DISTINCT":
 			switch e.Dialect() {
@@ -368,6 +368,35 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		ensureVSpace := false
 
 		// TODO
+
+		switch ctVal {
+		case "AS":
+
+			switch objType {
+			case "VIEW", "MATERIALIZED VIEW":
+			ensureVSpace = true
+			//default:
+			//	if ! cTok.IsCodeComment() {
+			//		honorVSpace = false
+			//	}
+			}
+
+			case "(":
+			if parensDepth == 0 {
+				honorVSpace = false
+			}
+			case ")":
+			if parensDepth < 2 {
+				honorVSpace = false
+			}
+		}
+
+		switch {
+		case cTok.IsCodeComment(), cTok.IsBag():
+			honorVSpace = true
+		case pTok.IsCodeComment(), pTok.IsBag():
+			honorVSpace = true
+}
 
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
 
