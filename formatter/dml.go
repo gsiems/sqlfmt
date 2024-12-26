@@ -526,7 +526,15 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					cat.updateClause(ctVal)
 				}
 
-			case "FROM", "HAVING", "INTERSECT", "JOIN", "MINUS",
+			case "FROM":
+				switch {
+				case pNcVal == "DISTINCT":
+					// nada
+				default:
+					cat.updateClause(ctVal)
+				}
+
+			case "HAVING", "INTERSECT", "JOIN", "MINUS",
 				"ORDER", "RETURNING", "SET", "UNION", "VALUES", "WHERE":
 
 				cat.updateClause(ctVal)
@@ -747,8 +755,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					// nada-- Oracle only allows one tuple per insert
 				case pNcVal == "VALUES":
 					// nada
-				default:
+				case pNcVal == ",":
 					ensureVSpace = true
+				default:
+					// nada
 				}
 			case ")":
 				if nNcVal == "AS" {
