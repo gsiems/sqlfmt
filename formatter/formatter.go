@@ -107,6 +107,98 @@ func FormatInput(e *env.Env, input string) (string, error) {
 	return fmtStatement, nil
 }
 
+// consolidateDatatypes consolidates tokens that make up a datatype declaration
+// by combining them into a single token.
+func consolidateDatatypes(e *env.Env, parsed []parser.Token) []parser.Token {
+
+	var conToks []parser.Token
+
+	idxMax := len(parsed) - 1
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		tc := parsed[idx]
+
+		switch tc.Category() {
+		case parser.Comment, parser.String, parser.Punctuation, parser.Data, parser.Other:
+			conToks = append(conToks, tc)
+			continue
+		}
+
+		idxEnd := min(idxMax, idx+8)
+
+		if idxEnd == idx {
+			conToks = append(conToks, tc)
+			continue
+		}
+
+		idxLen := idxEnd - idx
+		dtLen := 0
+
+		for i := 1; i <= idxLen; i++ {
+			switch parsed[idx+i].Category() {
+			case parser.Comment, parser.String, parser.Data:
+				break
+			}
+			switch parsed[idx+i].Type() {
+			case parser.BindParameter, parser.Label, parser.Operator, parser.NullItem, parser.WhiteSpace:
+				break
+			}
+
+			if isDatatype(e, parsed[idx : idx+i]) {
+				dtLen = max(dtLen, i)
+			}
+		}
+
+		if dtLen > 1 {
+			dts := asDatatypeString(parsed[idx : idx+dtLen])
+			nt, _ := parser.NewToken(dts, parser.Datatype)
+
+			nt.SetVSpace(parsed[idx].VSpace())
+			nt.SetHSpace(parsed[idx].HSpace())
+
+			conToks = append(conToks, nt)
+			idx += dtLen-1
+		} else {
+			conToks = append(conToks, tc)
+		}
+	}
+	return conToks
+}
+
+func isDatatype(e *env.Env, s []parser.Token) bool {
+	dbdialect := dialect.NewDialect(e.DialectName())
+	var ary []string
+	for _, t := range s {
+		ary = append(ary, t.Value())
+	}
+	return dbdialect.IsDatatype(ary...)
+}
+
+func asDatatypeString(s []parser.Token) string {
+	var z []string
+	pv := ""
+
+	for _, t := range s {
+		v := t.Value()
+		switch v {
+		case "(":
+			z = append(z, " "+v)
+		case ")", ",", "[", "]":
+			z = append(z, v)
+		default:
+			switch pv {
+			case "(", ",", "":
+				z = append(z, v)
+			default:
+				z = append(z, " "+v)
+			}
+		}
+		pv = v
+	}
+	return strings.Join(z, "")
+}
+
 func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 	dbdialect := dialect.NewDialect(e.DialectName())
@@ -118,11 +210,13 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 	// 4. Perform case folding of identifiers, datatypes, and keywords as
 	//      specified in the env
 
-	idxMax := len(parsed) - 1
+	p2 := consolidateDatatypes(e, parsed)
+
+	idxMax := len(p2) - 1
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := parsed[idx]
+		cTok := p2[idx]
 
 		tText := cTok.Value()
 		tType := cTok.Type()
@@ -131,27 +225,6 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 		if tType == parser.WhiteSpace {
 			// We just don't care about the trailing whitespace
 			continue
-		}
-
-		switch tCategory {
-		case parser.Datatype, parser.Identifier, parser.Keyword:
-			switch strings.ToUpper(tText) {
-			case "WITH", "WITHOUT":
-				// look ahead for "TIME ZONE" and combine things if found
-				if idx+2 <= idxMax {
-					tp1 := strings.ToUpper(parsed[idx+1].Value())
-					tp2 := strings.ToUpper(parsed[idx+2].Value())
-
-					if tp1 == "TIME" && tp2 == "ZONE" {
-
-						tText = strings.ToLower(tText) + " time zone"
-						tType = parser.Datatype
-						tCategory = parser.Datatype
-
-						idx += 2
-					}
-				}
-			}
 		}
 
 		switch tCategory {
@@ -206,7 +279,7 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 		switch tType {
 		case parser.Identifier, parser.Datatype, parser.Keyword:
-
+/*
 			switch e.Dialect() {
 			case dialect.PostgreSQL:
 				// Check, and tweak the tokens, for arrays
@@ -221,6 +294,7 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 					}
 				}
 			}
+			*/
 			tText = strings.ToLower(tText)
 		}
 
