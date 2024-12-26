@@ -1,6 +1,9 @@
 package dialect
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type StandardSQLDialect struct {
 	dialect int
@@ -39,49 +42,104 @@ func (d StandardSQLDialect) MaxOperatorLength() int {
 }
 
 // IsDatatype returns a boolean indicating if the supplied string
-// is considered to be a datatype in ISO Standared SQL
-func (d StandardSQLDialect) IsDatatype(s string) bool {
+// (or string slice) is considered to be a datatype in ISO Standared SQL
+func (d StandardSQLDialect) IsDatatype(s ...string) bool {
 
 	sqlStandardDatatypes := map[string]bool{
-		"bigint":                     true,
-		"binary large object":        true,
-		"binary":                     true,
-		"binary varying":             true,
-		"bit":                        true,
-		"bit varying":                true,
-		"boolean":                    true,
-		"character large object":     true,
-		"clob":                       true,
-		"character":                  true,
-		"character varying":          true,
-		"char":                       true,
-		"date":                       true,
-		"decimal":                    true,
-		"double precision":           true,
-		"float":                      true,
-		"integer":                    true,
-		"int":                        true,
-		"interval":                   true,
-		"interval day to second":     true, // expanded fields
-		"interval year to month":     true, // expanded fields
-		"national character":         true,
-		"national character varying": true,
-		"nclob":                      true,
-		"nchar":                      true,
-		"nchar varying":              true,
-		"numeric":                    true,
-		"real":                       true,
-		"smallint":                   true,
-		"timestamp":                  true,
-		"timestamp with time zone":   true,
-		"time":                       true,
-		"time with time zone":        true,
-		"tinyint":                    true,
-		"varchar":                    true,
-		"xml":                        true,
+		"bigint":                       true,
+		"binary large object":          true,
+		"binary":                       true,
+		"binary varying":               true,
+		"bit":                          true,
+		"bit varying":                  true,
+		"bit varying (n)":              true,
+		"boolean":                      true,
+		"character large object":       true,
+		"clob":                         true,
+		"character":                    true,
+		"character (n)":                true,
+		"character varying":            true,
+		"character varying (n)":        true,
+		"char":                         true,
+		"char (n)":                     true,
+		"date":                         true,
+		"decimal":                      true,
+		"decimal (n)":                  true,
+		"decimal (n,n)":                true,
+		"double precision":             true,
+		"float":                        true,
+		"float (n)":                    true,
+		"float (n,n)":                  true,
+		"integer":                      true,
+		"int":                          true,
+		"interval":                     true,
+		"interval day to second":       true, // expanded fields
+		"interval year to month":       true, // expanded fields
+		"national character":           true,
+		"national character varying":   true,
+		"nclob":                        true,
+		"nchar":                        true,
+		"nchar varying":                true,
+		"numeric":                      true,
+		"numeric (n)":                  true,
+		"numeric (n,n)":                true,
+		"real":                         true,
+		"smallint":                     true,
+		"timestamp":                    true,
+		"timestamp (n)":                true,
+		"timestamp with time zone":     true,
+		"timestamp (n) with time zone": true,
+		"time":                         true,
+		"time (n)":                     true,
+		"time with time zone":          true,
+		"time (n) with time zone":      true,
+		"tinyint":                      true,
+		"varchar":                      true,
+		"varchar (n)":                  true,
+		"xml":                          true,
 	}
 
-	if _, ok := sqlStandardDatatypes[strings.ToLower(s)]; ok {
+	var z []string
+	rn := regexp.MustCompile(`^[0-9]+$`)
+
+	for i, v := range s {
+		switch v {
+		case "(":
+			z = append(z, " "+v)
+		case ")", ",":
+			z = append(z, v)
+		default:
+			switch {
+			case rn.MatchString(v):
+				z = append(z, "n")
+			case i == 0:
+				z = append(z, v)
+			default:
+				z = append(z, " "+v)
+			}
+		}
+	}
+
+	k := strings.ToLower(strings.Join(z, ""))
+	if _, ok := sqlStandardDatatypes[k]; ok {
+		return true
+	}
+
+	return false
+}
+
+// IsDatatypePart returns a boolean indicating if the supplied string
+// is considered to be part of a datatype definition
+func (d StandardSQLDialect) IsDatatypePart(s string) bool {
+
+	switch strings.ToLower(s) {
+	case "bigint", "binary", "bit", "boolean", "char", "character", "clob",
+		"date", "day", "decimal", "double", "float", "int", "integer",
+		"interval", "large", "month", "national", "nchar", "nclob", "numeric",
+		"object", "precision", "real", "second", "smallint", "time",
+		"timestamp", "tinyint", "to", "varchar", "varying", "with", "xml",
+		"year", "zone":
+
 		return true
 	}
 

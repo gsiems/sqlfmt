@@ -1,6 +1,9 @@
 package dialect
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type OracleDialect struct {
 	dialect int
@@ -39,55 +42,88 @@ func (d OracleDialect) MaxOperatorLength() int {
 }
 
 // IsDatatype returns a boolean indicating if the supplied string
-// is considered to be a datatype in Oracle
-func (d OracleDialect) IsDatatype(s string) bool {
+// (or string slice) is considered to be a datatype in Oracle
+func (d OracleDialect) IsDatatype(s ...string) bool {
 
 	var oracleDatatypes = map[string]bool{
-		"bfile":                          true,
-		"binary_double":                  true,
-		"binary_float":                   true,
-		"binary_integer":                 true,
-		"blob":                           true,
-		"boolean":                        true,
-		"char":                           true, // (n [ byte | char ])
-		"clob":                           true,
-		"date":                           true,
-		"float":                          true, // (n)
-		"integer":                        true, // (n)
-		"interval day to second":         true, // interval day (n) to second (x)
-		"interval year to month":         true, // interval year (n) to month
-		"long":                           true,
-		"long raw":                       true,
-		"nchar":                          true, // (n)
-		"nclob":                          true,
-		"number":                         true, // [(p,s)]
-		"nvarchar2":                      true, // (n)
-		"pls_integer":                    true,
-		"raw":                            true, // (n)
-		"ref cursor":                     true,
-		"rowid":                          true,
-		"smallint":                       true,
-		"timestamp":                      true, // (n)
-		"timestamp with local time zone": true, // timestamp (n) with local time zone
-		"timestamp with time zone":       true, // timestamp (n) with time zone
-		"urowid":                         true, // [(n)]
-		"varchar":                        true, // (n)
-		"varchar2":                       true, // (n [ byte | char ])
-		"identity":                       true,
+		"bfile":                              true,
+		"binary_double":                      true,
+		"binary_float":                       true,
+		"binary_integer":                     true,
+		"blob":                               true,
+		"boolean":                            true,
+		"char":                               true, // (n [ byte | char ])
+		"char (n)":                           true, // (n [ byte | char ])
+		"char (n byte)":                      true, // (n [ byte | char ])
+		"char (n char)":                      true, // (n [ byte | char ])
+		"clob":                               true,
+		"date":                               true,
+		"float":                              true, // (n)
+		"float (n)":                          true, // (n)
+		"integer":                            true, // (n)
+		"integer (n)":                        true, // (n)
+		"interval day to second":             true, // interval day (n) to second (x)
+		"interval day (n) to second (n)":     true, // interval day (n) to second (x)
+		"interval year to month":             true, // interval year (n) to month
+		"interval year (n) to month":         true, // interval year (n) to month
+		"long":                               true,
+		"long raw":                           true,
+		"nchar":                              true, // (n)
+		"nchar (n)":                          true, // (n)
+		"nclob":                              true,
+		"number":                             true, // [(p,s)]
+		"number (n)":                         true, // [(p,s)]
+		"number (n,n)":                       true, // [(p,s)]
+		"nvarchar2":                          true, // (n)
+		"nvarchar2 (n)":                      true, // (n)
+		"pls_integer":                        true,
+		"raw":                                true, // (n)
+		"raw (n)":                            true, // (n)
+		"ref cursor":                         true,
+		"rowid":                              true,
+		"smallint":                           true,
+		"timestamp":                          true, // (n)
+		"timestamp (n)":                      true, // (n)
+		"timestamp with local time zone":     true, // timestamp (n) with local time zone
+		"timestamp (n) with local time zone": true, // timestamp (n) with local time zone
+		"timestamp with time zone":           true, // timestamp (n) with time zone
+		"timestamp (n) with time zone":       true, // timestamp (n) with time zone
+		"urowid":                             true, // [(n)]
+		"urowid (n)":                         true, // [(n)]
+		"varchar":                            true, // (n)
+		"varchar (n)":                        true, // (n)
+		"varchar2":                           true, // (n [ byte | char ])
+		"varchar2 (n)":                       true, // (n [ byte | char ])
+		"varchar2 (n byte)":                  true, // (n [ byte | char ])
+		"varchar2 (n char)":                  true, // (n [ byte | char ])
+		"identity":                           true,
 	}
 
-	k := strings.ToLower(s)
+	var z []string
+	rn := regexp.MustCompile(`^[0-9]+$`)
+
+	for i, v := range s {
+		switch v {
+		case "(":
+			z = append(z, " "+v)
+		case ")", ",":
+			z = append(z, v)
+		default:
+			switch {
+			case rn.MatchString(v):
+				z = append(z, "n")
+			case i == 0:
+				z = append(z, v)
+			default:
+				z = append(z, " "+v)
+			}
+		}
+	}
+
+	k := strings.ToLower(strings.Join(z, ""))
 	if _, ok := oracleDatatypes[k]; ok {
 		return true
 	}
-
-
-	// TODO
-	// interval day [(day_precision)] to second [(fractional_seconds_precision)]
-	// interval year [(year_precision)] to month
-	// timestamp [(fractional_seconds_precision)]
-	// timestamp [(fractional_seconds_precision)] with local time zone
-	// timestamp [(fractional_seconds_precision)] with time zone
 
 	return false
 }

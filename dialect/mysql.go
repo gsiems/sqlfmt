@@ -1,6 +1,9 @@
 package dialect
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type MySQLDialect struct {
 	dialect int
@@ -39,51 +42,105 @@ func (d MySQLDialect) MaxOperatorLength() int {
 }
 
 // IsDatatype returns a boolean indicating if the supplied string
-// is considered to be a datatype in MySQL
-func (d MySQLDialect) IsDatatype(s string) bool {
+// (or string slice) is considered to be a datatype in MySQL
+func (d MySQLDialect) IsDatatype(s ...string) bool {
 
 	var mysqlDatatypes = map[string]bool{
-		"bigint":           true, // [(n)]
-		"binary":           true, // [(n)]
-		"bit":              true,
-		"blob":             true,
-		"boolean":          true,
-		"bool":             true,
-		"char":             true, // (n)
-		"character":        true, // (n)
-		"datetime":         true,
-		"date":             true,
-		"decimal":          true, // [(p[,s])]
-		"dec":              true, // [(p[,s])]
-		"double precision": true, // [(p[,s])]
-		"double":           true, // [(p[,s])]
-		"enum":             true,
-		"float":            true, // [(p[,s])]
-		"integer":          true, // [(n)]
-		"int":              true, // [(n)]
-		"longblob":         true,
-		"longtext":         true,
-		"mediumblob":       true,
-		"mediumint":        true, // (n)
-		"mediumtext":       true,
-		"nchar":            true, // (n)
-		"nvarchar":         true, // (n)
-		"numeric":          true, // (p,s)
-		"real":             true, // (p,s)
-		"set":              true,
-		"smallint":         true, // [(n)]
-		"text":             true,
-		"timestamp":        true,
-		"time":             true,
-		"tinyblob":         true,
-		"tinyint":          true,
-		"tinytext":         true,
-		"varbinary":        true, //(n)
-		"varchar":          true,
-		"year":             true,
+		"bigint":                 true, // [(n)]
+		"bigint (n)":             true, // [(n)]
+		"binary":                 true, // [(n)]
+		"binary (n)":             true, // [(n)]
+		"bit":                    true,
+		"blob":                   true,
+		"boolean":                true,
+		"bool":                   true,
+		"char":                   true, // (n)
+		"char (n)":               true, // (n)
+		"character":              true, // (n)
+		"character (n)":          true, // (n)
+		"datetime":               true,
+		"date":                   true,
+		"decimal":                true, // [(p[,s])]
+		"decimal (n)":            true, // [(p[,s])]
+		"decimal (n,n)":          true, // [(p[,s])]
+		"dec":                    true, // [(p[,s])]
+		"dec (n)":                true, // [(p[,s])]
+		"dec (n,n)":              true, // [(p[,s])]
+		"double precision":       true, // [(p[,s])]
+		"double precision (n)":   true, // [(p[,s])]
+		"double precision (n,n)": true, // [(p[,s])]
+		"double":                 true, // [(p[,s])]
+		"double (n)":             true, // [(p[,s])]
+		"double (n,n)":           true, // [(p[,s])]
+		"enum":                   true,
+		"float":                  true, // [(p[,s])]
+		"float (n)":              true, // [(p[,s])]
+		"float (n,n)":            true, // [(p[,s])]
+		"integer":                true, // [(n)]
+		"integer (n)":            true, // [(n)]
+		"int":                    true, // [(n)]
+		"int (n)":                true, // [(n)]
+		"longblob":               true,
+		"longtext":               true,
+		"mediumblob":             true,
+		"mediumint":              true, // (n)
+		"mediumint (n)":          true, // (n)
+		"mediumtext":             true,
+		"nchar":                  true, // (n)
+		"nchar (n)":              true, // (n)
+		"nvarchar":               true, // (n)
+		"nvarchar (n)":           true, // (n)
+		"numeric":                true, // (p,s)
+		"numeric (n)":            true, // (p,s)
+		"numeric (n,n)":          true, // (p,s)
+		"real":                   true, // (p,s)
+		"real (n)":               true, // (p,s)
+		"real (n,n)":             true, // (p,s)
+		"set":                    true,
+		"smallint":               true, // [(n)]
+		"smallint (n)":           true, // [(n)]
+		"text":                   true,
+		"timestamp":              true,
+		"time":                   true,
+		"tinyblob":               true,
+		"tinyint":                true,
+		"tinytext":               true,
+		"varbinary":              true, // (n)
+		"varbinary (n)":          true, // (n)
+		"varchar":                true,
+		"year":                   true,
+		"geometry":               true, //GIS extension
+		"geometrycollection":     true, //GIS extension
+		"linestring":             true, //GIS extension
+		"multilinestring":        true, //GIS extension
+		"multipoint":             true, //GIS extension
+		"multipolygon":           true, //GIS extension
+		"point":                  true, //GIS extension
+		"polygon":                true, //GIS extension
 	}
 
-	k := strings.ToLower(s)
+	var z []string
+	rn := regexp.MustCompile(`^[0-9]+$`)
+
+	for i, v := range s {
+		switch v {
+		case "(":
+			z = append(z, " "+v)
+		case ")", ",":
+			z = append(z, v)
+		default:
+			switch {
+			case rn.MatchString(v):
+				z = append(z, "n")
+			case i == 0:
+				z = append(z, v)
+			default:
+				z = append(z, " "+v)
+			}
+		}
+	}
+
+	k := strings.ToLower(strings.Join(z, ""))
 	if _, ok := mysqlDatatypes[k]; ok {
 		return true
 	}

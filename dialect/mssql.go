@@ -1,6 +1,9 @@
 package dialect
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type MSSQLDialect struct {
 	dialect int
@@ -39,29 +42,40 @@ func (d MSSQLDialect) MaxOperatorLength() int {
 }
 
 // IsDatatype returns a boolean indicating if the supplied string
-// is considered to be a datatype in MSSQL
-func (d MSSQLDialect) IsDatatype(s string) bool {
+// (or string slice) is considered to be a datatype in MSSQL
+func (d MSSQLDialect) IsDatatype(s ...string) bool {
 
 	var mssqlDatatypes = map[string]bool{
 		"bigint":           true,
 		"binary":           true,
+		"binary (n)":       true,
 		"bit":              true,
 		"char":             true,
+		"char (n)":         true,
 		"cursor":           true,
 		"datetime2":        true,
 		"datetimeoffset":   true,
 		"datetime":         true,
 		"date":             true,
 		"decimal":          true,
+		"decimal (n)":      true,
+		"decimal (n,n)":    true,
 		"float":            true,
+		"float (n)":        true,
 		"image":            true,
 		"int":              true,
+		"json":             true,
 		"money":            true,
 		"nchar":            true,
+		"nchar (n)":        true,
 		"ntext":            true,
 		"numeric":          true,
+		"numeric (n)":      true,
+		"numeric (n,n)":    true,
 		"nvarchar":         true,
-		"real":             true,
+		"nvarchar (n)":     true,
+		"nvarchar (max)":   true,
+		"real":             true, // (n)???
 		"smalldatetime":    true,
 		"smallint":         true,
 		"smallmoney":       true,
@@ -73,31 +87,39 @@ func (d MSSQLDialect) IsDatatype(s string) bool {
 		"tinyint":          true,
 		"uniqueidentifier": true,
 		"varbinary":        true,
+		"varbinary (n)":    true,
+		"varbinary (max)":  true,
 		"varchar":          true,
+		"varchar (n)":      true,
+		"varchar (max)":    true,
+		"vector (n)":       true,
 		"xml":              true,
+		"geography": true,  // GIS extension
+		"geometry": true, // GIS extension
 	}
 
-	/*
-	   MS Access Data Types
-	   Data type 	Description 	Storage
-	   Text 	Use for text or combinations of text and numbers. 255 characters maximum
-	   Memo 	Memo is used for larger amounts of text. Stores up to 65,536 characters. Note: You cannot sort a memo field. However, they are searchable
-	   Byte 	Allows whole numbers from 0 to 255 	1 byte
-	   Integer 	Allows whole numbers between -32,768 and 32,767 	2 bytes
-	   Long 	Allows whole numbers between -2,147,483,648 and 2,147,483,647 	4 bytes
-	   Single 	Single precision floating-point. Will handle most decimals 	4 bytes
-	   Double 	Double precision floating-point. Will handle most decimals 	8 bytes
-	   Currency 	Use for currency. Holds up to 15 digits of whole dollars, plus 4 decimal places. Tip: You can choose which country's currency to use 	8 bytes
-	   AutoNumber 	AutoNumber fields automatically give each record its own number, usually starting at 1 	4 bytes
-	   Date/Time 	Use for dates and times 	8 bytes
-	   Yes/No 	A logical field can be displayed as Yes/No, True/False, or On/Off. In code, use the constants True and False (equivalent to -1 and 0). Note: Null values are not allowed in Yes/No fields 	1 bit
-	   Ole Object 	Can store pictures, audio, video, or other BLOBs (Binary Large Objects) 	up to 1GB
-	   Hyperlink 	Contain links to other files, including web pages
-	   Lookup Wizard 	Let you type a list of options, which can then be chosen from a drop-down list 	4 bytes
+	var z []string
+	rn := regexp.MustCompile(`^[0-9]+$`)
 
-	*/
+	for i, v := range s {
+		switch strings.ToLower(v) {
+		case "(":
+			z = append(z, " "+v)
+		case ")", ",", "max":
+			z = append(z, v)
+		default:
+			switch {
+			case rn.MatchString(v):
+				z = append(z, "n")
+			case i == 0:
+				z = append(z, v)
+			default:
+				z = append(z, " "+v)
+			}
+		}
+	}
 
-	k := strings.ToLower(s)
+	k := strings.ToLower(strings.Join(z, ""))
 	if _, ok := mssqlDatatypes[k]; ok {
 		return true
 	}
@@ -377,7 +399,7 @@ func (d MSSQLDialect) IsLabel(s string) bool {
 	if string(s[len(s)-1]) != ":" {
 		return false
 	}
-	if !d.IsIdentifier(s[0:len(s)-2]) {
+	if !d.IsIdentifier(s[0 : len(s)-2]) {
 		return false
 	}
 	return true

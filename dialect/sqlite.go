@@ -1,6 +1,9 @@
 package dialect
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type SQLiteDialect struct {
 	dialect int
@@ -40,7 +43,7 @@ func (d SQLiteDialect) MaxOperatorLength() int {
 
 // IsDatatype returns a boolean indicating if the supplied string
 // is considered to be a datatype in SQLite
-func (d SQLiteDialect) IsDatatype(s string) bool {
+func (d SQLiteDialect) IsDatatype(s ...string) bool {
 
 	sqliteDatatypes := map[string]bool{
 		"bigint":            true,
@@ -72,16 +75,43 @@ func (d SQLiteDialect) IsDatatype(s string) bool {
 		"varying character": true,
 	}
 
-	k := strings.ToLower(s)
-	if _, ok := sqliteDatatypes[k]; ok {
-		return true
-	}
-
 	// NB column specifications can specify size, precision, or precision and
 	// scale though SQLite doesn't appear to to anything with the extra
 	// information or constrain the data to match the size, precision, or
 	// precision and scale. SQLite will even allow column specifications that
 	// make no sense (such as char(10,2) or number(-5)).
+
+	var z []string
+	rn := regexp.MustCompile(`^[0-9]+$`)
+	rns := regexp.MustCompile(`^[+\-][0-9]+$`)
+
+	for i, v := range s {
+		switch v {
+		case "(":
+			z = append(z, " "+v)
+		case ")", ",", "[", "]":
+			z = append(z, v)
+		default:
+			switch {
+			case rn.MatchString(v), rns.MatchString(v):
+				z = append(z, "n")
+			case i == 0:
+				z = append(z, v)
+			default:
+				z = append(z, " "+v)
+			}
+		}
+	}
+
+	k := strings.ToLower(strings.Join(z, ""))
+
+	if strings.Count(k, "(") == 1 {
+		ary := strings.Split(k, "(")
+		l := strings.TrimRight(ary[0], " ")
+		if _, ok := sqliteDatatypes[l]; ok {
+			return true
+		}
+	}
 
 	return false
 }

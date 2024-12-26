@@ -11,7 +11,7 @@ type DbDialect interface {
 	IdentQuoteChar() string
 	StringQuoteChar() string
 	MaxOperatorLength() int
-	IsDatatype(s string) bool
+	IsDatatype(s ...string) bool
 	keyword(s string) (bool, bool)
 	IsKeyword(s string) bool
 	IsReservedKeyword(s string) bool
@@ -27,6 +27,8 @@ func StrToDialect(v string) int {
 		return MariaDB
 	case "mssql":
 		return MSSQL
+	case "msaccess", "access":
+		return MSAccess
 	case "mysql":
 		return MySQL
 	case "oracle", "ora":
@@ -45,6 +47,8 @@ func NewDialect(v string) DbDialect {
 	switch StrToDialect(v) {
 	case MariaDB:
 		return NewMariaDBDialect()
+	case MSAccess:
+		return NewMSAccessDialect()
 	case MSSQL:
 		return NewMSSQLDialect()
 	case MySQL:

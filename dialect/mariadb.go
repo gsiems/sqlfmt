@@ -1,6 +1,9 @@
 package dialect
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type MariaDBDialect struct {
 	dialect int
@@ -39,46 +42,213 @@ func (d MariaDBDialect) MaxOperatorLength() int {
 }
 
 // IsDatatype returns a boolean indicating if the supplied string
-// is considered to be a datatype in MariaDB
-func (d MariaDBDialect) IsDatatype(s string) bool {
+// (or string slice) is considered to be a datatype in MariaDB
+func (d MariaDBDialect) IsDatatype(s ...string) bool {
 
 	var mariadbDatatypes = map[string]bool{
-		"bigint":           true,
-		"binary":           true,
-		"bit":              true,
-		"blob":             true,
-		"boolean":          true,
-		"bool":             true,
-		"char":             true,
-		"datetime":         true,
-		"date":             true,
-		"decimal":          true,
-		"dec":              true,
-		"double precision": true,
-		"double":           true,
-		"enum":             true,
-		"float":            true,
-		"integer":          true,
-		"int":              true,
-		"longblob":         true,
-		"longtext":         true,
-		"mediumblob":       true,
-		"mediumint":        true,
-		"mediumtext":       true,
-		"set":              true,
-		"smallint":         true,
-		"text":             true,
-		"timestamp":        true,
-		"time":             true,
-		"tinyblob":         true,
-		"tinyint":          true,
-		"tinytext":         true,
-		"varbinary":        true,
-		"varchar":          true,
-		"year":             true,
+
+		"bigint (n) signed":               true,
+		"bigint (n)":                      true,
+		"bigint (n) unsigned":             true,
+		"bigint (n) zerofill":             true,
+		"bigint signed":                   true,
+		"bigint":                          true,
+		"bigint unsigned":                 true,
+		"bigint zerofill":                 true,
+		"binary (n)":                      true,
+		"binary":                          true,
+		"bit (n)":                         true,
+		"bit":                             true,
+		"blob (n)":                        true,
+		"blob":                            true,
+		"boolean":                         true,
+		"bool":                            true,
+		"char byte (n)":                   true, // compatibility feature
+		"char byte":                       true, // compatibility feature
+		"char (n)":                        true,
+		"char":                            true,
+		"datetime":                        true,
+		"date":                            true,
+		"decimal (n,n) signed":            true,
+		"decimal (n,n)":                   true,
+		"decimal (n,n) unsigned":          true,
+		"decimal (n,n) zerofill":          true,
+		"decimal (n) signed":              true,
+		"decimal (n)":                     true,
+		"decimal (n) unsigned":            true,
+		"decimal (n) zerofill":            true,
+		"decimal signed":                  true,
+		"decimal":                         true,
+		"decimal unsigned":                true,
+		"decimal zerofill":                true,
+		"dec (n,n) signed":                true, // synonym for decimal
+		"dec (n,n)":                       true, // synonym for decimal
+		"dec (n,n) unsigned":              true, // synonym for decimal
+		"dec (n,n) zerofill":              true, // synonym for decimal
+		"dec (n) signed":                  true, // synonym for decimal
+		"dec (n)":                         true, // synonym for decimal
+		"dec (n) unsigned":                true, // synonym for decimal
+		"dec (n) zerofill":                true, // synonym for decimal
+		"dec signed":                      true, // synonym for decimal
+		"dec":                             true, // synonym for decimal
+		"dec unsigned":                    true, // synonym for decimal
+		"dec zerofill":                    true, // synonym for decimal
+		"double (n,n) signed":             true,
+		"double (n,n)":                    true,
+		"double (n,n) unsigned":           true,
+		"double (n,n) zerofill":           true,
+		"double precision (n,n) signed":   true,
+		"double precision (n,n)":          true,
+		"double precision (n,n) unsigned": true,
+		"double precision (n,n) zerofill": true,
+		"double precision signed":         true,
+		"double precision":                true,
+		"double precision unsigned":       true,
+		"double precision zerofill":       true,
+		"double signed":                   true,
+		"double":                          true,
+		"double unsigned":                 true,
+		"double zerofill":                 true,
+		"enum":                            true,
+		"fixed (n,n) signed":              true, // other DB compatibility synonym for decimal
+		"fixed (n,n)":                     true, // other DB compatibility synonym for decimal
+		"fixed (n,n) unsigned":            true, // other DB compatibility synonym for decimal
+		"fixed (n,n) zerofill":            true, // other DB compatibility synonym for decimal
+		"fixed (n) signed":                true, // other DB compatibility synonym for decimal
+		"fixed (n)":                       true, // other DB compatibility synonym for decimal
+		"fixed (n) unsigned":              true, // other DB compatibility synonym for decimal
+		"fixed (n) zerofill":              true, // other DB compatibility synonym for decimal
+		"fixed signed":                    true, // other DB compatibility synonym for decimal
+		"fixed":                           true, // other DB compatibility synonym for decimal
+		"fixed unsigned":                  true, // other DB compatibility synonym for decimal
+		"fixed zerofill":                  true, // other DB compatibility synonym for decimal
+		"float (n,n) signed":              true,
+		"float (n,n)":                     true,
+		"float (n,n) unsigned":            true,
+		"float (n,n) zerofill":            true,
+		"float signed":                    true,
+		"float":                           true,
+		"float unsigned":                  true,
+		"float zerofill":                  true,
+		"integer (n) signed":              true,
+		"integer (n)":                     true,
+		"integer (n) unsigned":            true,
+		"integer (n) zerofill":            true,
+		"integer signed":                  true,
+		"integer":                         true,
+		"integer unsigned":                true,
+		"integer zerofill":                true,
+		"int (n) signed":                  true,
+		"int (n)":                         true,
+		"int (n) unsigned":                true,
+		"int (n) zerofill":                true,
+		"int signed":                      true,
+		"int":                             true,
+		"int unsigned":                    true,
+		"int zerofill":                    true,
+		"longblob":                        true,
+		"longtext":                        true,
+		"mediumblob":                      true,
+		"mediumint (n) signed":            true,
+		"mediumint (n)":                   true,
+		"mediumint (n) unsigned":          true,
+		"mediumint (n) zerofill":          true,
+		"mediumint signed":                true,
+		"mediumint":                       true,
+		"mediumint unsigned":              true,
+		"mediumint zerofill":              true,
+		"mediumtext":                      true,
+		"national char (n)":               true,
+		"national char":                   true,
+		"national varchar (n)":            true,
+		"national varchar":                true,
+		"number (n,n) signed":             true, // Oracle mode synonym for decimal
+		"number (n,n)":                    true, // Oracle mode synonym for decimal
+		"number (n,n) unsigned":           true, // Oracle mode synonym for decimal
+		"number (n,n) zerofill":           true, // Oracle mode synonym for decimal
+		"number (n) signed":               true, // Oracle mode synonym for decimal
+		"number (n)":                      true, // Oracle mode synonym for decimal
+		"number (n) unsigned":             true, // Oracle mode synonym for decimal
+		"number (n) zerofill":             true, // Oracle mode synonym for decimal
+		"number signed":                   true, // Oracle mode synonym for decimal
+		"number":                          true, // Oracle mode synonym for decimal
+		"number unsigned":                 true, // Oracle mode synonym for decimal
+		"number zerofill":                 true, // Oracle mode synonym for decimal
+		"numeric (n,n) signed":            true, // synonym for decimal
+		"numeric (n,n)":                   true, // synonym for decimal
+		"numeric (n,n) unsigned":          true, // synonym for decimal
+		"numeric (n,n) zerofill":          true, // synonym for decimal
+		"numeric (n) signed":              true, // synonym for decimal
+		"numeric (n)":                     true, // synonym for decimal
+		"numeric (n) unsigned":            true, // synonym for decimal
+		"numeric (n) zerofill":            true, // synonym for decimal
+		"numeric signed":                  true, // synonym for decimal
+		"numeric":                         true, // synonym for decimal
+		"numeric unsigned":                true, // synonym for decimal
+		"numeric zerofill":                true, // synonym for decimal
+		"real (n,n) signed":               true,
+		"real (n,n)":                      true,
+		"real (n,n) unsigned":             true,
+		"real (n,n) zerofill":             true,
+		"real signed":                     true,
+		"real":                            true,
+		"real unsigned":                   true,
+		"real zerofill":                   true,
+		"set":                             true,
+		"smallint (n) signed":             true,
+		"smallint (n)":                    true,
+		"smallint (n) unsigned":           true,
+		"smallint (n) zerofill":           true,
+		"smallint signed":                 true,
+		"smallint":                        true,
+		"smallint unsigned":               true,
+		"smallint zerofill":               true,
+		"text (n)":                        true,
+		"text":                            true,
+		"timestamp":                       true,
+		"time":                            true,
+		"tinyblob":                        true,
+		"tinyint (n) signed":              true,
+		"tinyint (n)":                     true,
+		"tinyint (n) unsigned":            true,
+		"tinyint (n) zerofill":            true,
+		"tinyint signed":                  true,
+		"tinyint":                         true,
+		"tinyint unsigned":                true,
+		"tinyint zerofill":                true,
+		"tinytext":                        true,
+		"varbinary (n)":                   true,
+		"varbinary":                       true,
+		"varchar (n)":                     true,
+		"varchar":                         true,
+		"vector (n)":                      true,
+		"vector":                          true,
+		"year":                            true,
 	}
 
-	if _, ok := mariadbDatatypes[strings.ToLower(s)]; ok {
+	var z []string
+	rn := regexp.MustCompile(`^[0-9]+$`)
+
+	for i, v := range s {
+		switch v {
+		case "(":
+			z = append(z, " "+v)
+		case ")", ",":
+			z = append(z, v)
+		default:
+			switch {
+			case rn.MatchString(v):
+				z = append(z, "n")
+			case i == 0:
+				z = append(z, v)
+			default:
+				z = append(z, " "+v)
+			}
+		}
+	}
+
+	k := strings.ToLower(strings.Join(z, ""))
+	if _, ok := mariadbDatatypes[k]; ok {
 		return true
 	}
 
