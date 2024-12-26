@@ -428,11 +428,11 @@ func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		switch ctVal {
 		case "AND", "ANY", "AS", "ATOMIC", "BEGIN", "BREAK", "CASE", "CLOSE",
 			"CONCURRENTLY", "CONTINUE", "DECLARE", "DISTINCT", "ELSE",
-			"ELSEIF", "ELSIF", "END", "EXECUTE", "EXCEPTION", "EXIT", "FOR",
-			"FOREACH", "FROM", "GET", "IF", "IN", "IS", "LIKE", "LOOP",
-			"MATERIALIZED", "NEXT", "NOT", "NULL", "OPEN", "OR", "QUERY",
-			"RAISE", "REFRESH", "RETURN", "SETOF", "THEN", "VIEW", "WHEN",
-			"WHILE":
+			"ELSEIF", "ELSIF", "END", "EXECUTE", "EXCEPTION", "EXISTS", "EXIT",
+			"FETCH", "FOR", "FOREACH", "FOUND", "FROM", "GET", "IF", "IN",
+			"INTO", "IS", "LIKE", "LOOP", "MATERIALIZED", "NEXT", "NOT",
+			"NULL", "OPEN", "OR", "QUERY", "RAISE", "REFRESH", "RETURN",
+			"SETOF", "THEN", "VIEW", "WHEN", "WHILE":
 
 			//"SQLERRM", "SQLSTATE", "STACKED", "DIAGNOSTICS",
 
@@ -620,7 +620,10 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 				ensureVSpace = true
 
 			case "LOOP":
-				if ctVal != ";" {
+				switch ctVal {
+				case ";":
+					// nada
+				default:
 					ensureVSpace = true
 				}
 
