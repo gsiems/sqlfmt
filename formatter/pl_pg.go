@@ -529,6 +529,13 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 	var pNcVal string // The upper case value of the previous non-comment token
 	var pKwVal string // The upper case value of the previous keyword token
 
+	declareCnt := 0
+	for idx := 0; idx <= idxMax; idx++ {
+		if line[idx].AsUpper() == "DECLARE" {
+			declareCnt++
+		}
+	}
+
 	for idx := 0; idx <= idxMax; idx++ {
 
 		cTok := line[idx]
@@ -632,7 +639,12 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 				// since some code uses DECLARE before each individual variable
 				// (ESRI comes to mind) it can't be assumed that there will be a
 				// new-line after
-				honorVSpace = true
+				switch declareCnt {
+				case 1:
+					ensureVSpace = true
+				default:
+					honorVSpace = true
+				}
 
 			case "BEGIN":
 				if ctVal != "ATOMIC" {
@@ -805,11 +817,13 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 	var pTok FmtToken // The previous token
 	var pNcVal string // The upper case value of the previous non-comment token
 
+	// procedure/function labels
 	var psLabels = []string{"TYPE", "NAME", "SIGNATURE", "RETURNS", "LANGUAGE",
 		"TRANSFORM", "WINDOW", "VOLATILE", "LEAKPROOF", "CALLING MODE",
 		"SECURITY", "PARALLEL", "COST", "ROWS", "SUPPORT", "SET", "AS",
 		"BODY", "FINAL"}
 
+	// trigger labels
 	var tsLabels = []string{"TYPE", "NAME", "EVENT", "TABLE", "FROM",
 		"DEFERRABLE", "REFERENCING", "FOR", "WHEN", "EXECUTE", "FINAL"}
 
@@ -977,13 +991,24 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 		}
 	}
 
-	// TODO: The following is a hack. Can't see why but sorting the non-body
-	// when there are parameters (in the input) after the body can cause line
-	// feeds to be added prior to the closing semi-colon. This hack deals with
-	// that unwanted extra vertical space but it would be better to understand
-	// why this is happening.
+	// Cleanup extraneous vertical spacing
 	pTok = FmtToken{}
 	for idx, cTok := range tFormatted {
+
+		if isPgBodyBoundary(cTok.value) {
+			if pTok.AsUpper() == "AS" {
+				tFormatted[idx].vSpace = 0
+				tFormatted[idx].hSpace = " "
+			}
+		} else if cTok.vSpace > 1 {
+			tFormatted[idx].vSpace = 1
+		}
+
+		// TODO: The following is a hack. Can't see why but sorting the
+		// non-body when there are parameters (in the input) after the
+		// body can cause vertical space to be added prior to the closing
+		// semi-colon. This removes extra vertical space but it would be
+		// better to understand why this is happening.
 		if cTok.value == ";" {
 			if !pTok.IsCodeComment() {
 				tFormatted[idx].vSpace = 0
@@ -995,22 +1020,6 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 
 	var newLines [][]FmtToken
 	newLines = append(newLines, tFormatted)
-	/*
-		var newLine []FmtToken
-
-		for _, cTok := range tFormatted {
-			if cTok.vSpace > 0 {
-				if len(newLine) > 0 {
-					newLines = append(newLines, newLine)
-					newLine = nil
-				}
-			}
-			newLine = append(newLine, cTok)
-		}
-		if len(newLine) > 0 {
-			newLines = append(newLines, newLine)
-		}
-	*/
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
