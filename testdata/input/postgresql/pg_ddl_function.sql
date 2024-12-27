@@ -51,9 +51,9 @@ BEGIN
         RETURN passed;
 END;
 $$  LANGUAGE plpgsql
-    SECURITY DEFINER
-    -- Set a secure search_path: trusted schema(s), then 'pg_temp'.
-    SET search_path = admin, pg_temp;
+    SECURITY DEFINER -- comment on security definer
+    SET search_path = admin, pg_temp -- Set a secure search_path: trusted schema(s), then 'pg_temp'.
+    ;
 
 REVOKE ALL ON FUNCTION check_password(uname TEXT, pass TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION check_password(uname TEXT, pass TEXT) TO admins;

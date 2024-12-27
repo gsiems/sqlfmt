@@ -34,10 +34,23 @@ GRANT ALL ON FUNCTION activity_is_parent_of ( integer, integer ) TO some_role ;
 GRANT ALL ON FUNCTION activity_is_parent_of (
         integer, integer ) TO some_other_role ;
 
+GRANT EXECUTE ON FUNCTION some_function ( integer, integer, text, numeric,
+    integer, integer, text, numeric, numeric, numeric, numeric, numeric,
+    numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric,
+    numeric, integer, integer, timestamp with time zone,
+    timestamp with time zone ) TO some_user ;
+
+ALTER FUNCTION some_function ( integer, integer, text, numeric,
+    integer, integer, text, numeric, numeric, numeric, numeric, numeric,
+    numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric,
+    numeric, integer, integer, timestamp with time zone,
+    timestamp with time zone ) OWNER TO some_user ;
+
 grant select on all tables in schema "FOO" to read_only_role ;
 grant select on all tables in schema "foo" to read_only_role ;
 grant select on all tables in schema foo to read_only_role ;
 grant select on all tables in schema FOO to read_only_role ;
+
 
 
 /*

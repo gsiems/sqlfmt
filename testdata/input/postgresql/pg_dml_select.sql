@@ -17,6 +17,18 @@ SELECT -2.134 * +5E+6 AS col1,
         AND +5E+6<=7
  ;
 
+        SELECT id
+            FROM app_data.rt_table
+            WHERE name IS NOT DISTINCT FROM trim ( a_name )
+                AND EXISTS (
+                    SELECT 1
+                        FROM app_data.rt_table
+                        WHERE name IS NOT DISTINCT FROM trim ( a_name )
+                        GROUP BY name
+                        HAVING count (*) = 1
+                ) ;
+
+
 SELECT * FROM (SELECT * FROM mytable FOR UPDATE) ss WHERE col1 = 5;
 
 SELECT f.title, f.did, d.name, f.date_prod, f.kind

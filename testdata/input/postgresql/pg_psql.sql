@@ -1,4 +1,4 @@
- -- sqlfmt d:postgres
+ -- sqlfmt d:postgres doNotFormat
 
 
 SET statement_timeout = 0 ;

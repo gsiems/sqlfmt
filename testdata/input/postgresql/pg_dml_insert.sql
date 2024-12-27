@@ -49,6 +49,19 @@ WITH upd AS (
 )
 INSERT INTO employees_log SELECT *, current_timestamp FROM upd;
 
+WITH n AS (
+    SELECT generate_series ( 0, 36 ) AS val
+    UNION
+    SELECT 91
+    UNION
+    SELECT 99
+    ORDER BY 1
+)
+INSERT INTO st_table (
+        val )
+    SELECT val
+        FROM n
+            ON CONFLICT ON CONSTRAINT st_table_pk DO NOTHING ;
 
 INSERT INTO distributors (did, dname)
     VALUES (5, 'Gizmo Transglobal'), (6, 'Associated Computing, Inc')

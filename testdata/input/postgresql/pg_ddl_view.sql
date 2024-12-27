@@ -32,6 +32,11 @@ CREATE VIEW comedies AS
     FROM films f
     WHERE f.kind = 'Comedy';
 
+create view comedies as
+select f.*, country_code_to_name(f.country_code) as country, (select avg(r.rating) from user_ratings r where r.film_id = f.id) as avg_rating
+from films f where f.kind = 'Comedy';
+
+
 CREATE RECURSIVE VIEW public.nums_1_100 (n) AS
     VALUES (1)
 UNION ALL
