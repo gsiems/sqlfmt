@@ -102,33 +102,190 @@ func FormatInput(e *env.Env, input string) (string, error) {
 	cleaned := prepParsed(e, parsed)
 	bagMap, mainTokens := tagBags(e, cleaned)
 	fmtTokens := formatBags(e, mainTokens, bagMap)
-	fmtStatement := combineTokens(e, fmtTokens, bagMap)
+	untagged := untagBags(fmtTokens, bagMap)
+	fmtStatement := combineTokens(e, untagged)
 
 	return fmtStatement, nil
 }
 
+// stashComments caches comments with their adjoining non-comment token for the
+// purpose of simplifying formatting logic. (also translates parser tokens to
+// formatting tokens)
+func stashComments(e *env.Env, tokens []parser.Token) []FmtToken {
+
+	var ret []FmtToken
+	var lCmts []CmtToken
+
+	for idx, cTok := range tokens {
+
+		vSpace := cTok.VSpace()
+		hSpace := ""
+
+		switch vSpace {
+		case 0:
+			if idx > 0 {
+				hSpace = " "
+			}
+		case 1, 2:
+			hSpace = ""
+		default:
+			vSpace = 2
+			hSpace = ""
+		}
+
+		switch cTok.Type() {
+		case parser.WhiteSpace:
+			// We just don't care about the trailing whitespace
+			continue
+		case parser.LineComment, parser.PoundLineComment, parser.BlockComment:
+
+			nt := CmtToken{
+				typeOf: cTok.Type(),
+				value:  cTok.Value(),
+				vSpace: vSpace,
+				hSpace: hSpace,
+			}
+
+			// If the comment has no vertical space and is not the first token
+			// then it is cached as a trailing comment to the preceding non-comment
+			// token... otherwise cache it as a leading comment to the next
+			// non-comment token
+			switch {
+			case cTok.VSpace() > 0:
+				lCmts = append(lCmts, nt)
+			case len(ret) == 0:
+				lCmts = append(lCmts, nt)
+			default:
+				ret[len(ret)-1].AddTrailingComment(nt)
+			}
+		default:
+			nt := FmtToken{
+				categoryOf: cTok.Category(),
+				typeOf:     cTok.Type(),
+				value:      cTok.Value(),
+				vSpace:     vSpace,
+				hSpace:     hSpace,
+				vSpaceOrig: cTok.VSpace(),
+				hSpaceOrig: cTok.HSpace(),
+			}
+
+			if len(lCmts) > 0 {
+				nt.AddLeadingComment(lCmts...)
+				lCmts = nil
+			}
+			ret = append(ret, nt)
+		}
+
+	}
+
+	// If there are comments at the end of the input then simply append them to
+	// the final non-comment token
+	if len(lCmts) > 0 && len(ret) > 0 {
+		ret[len(ret)-1].AddTrailingComment(lCmts...)
+	}
+
+	return ret
+}
+
+// consolidateMWTokens consolidates multi-word tokens such as "END IF",
+// "END CASE", or "END LOOP" by combining them into a single token.
+func consolidateMWTokens(e *env.Env, tokens []FmtToken) []FmtToken {
+
+	var ret []FmtToken
+
+	idxMax := len(tokens) - 1
+
+	// If, for some reason, there is are comments between the tokens then
+	// append them as trailing comments
+	skipNext := false
+	for idx := 0; idx <= idxMax; idx++ {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+
+		cTok := tokens[idx]
+
+		combineNext := false
+		if idx < idxMax {
+
+			switch cTok.AsUpper() {
+			case "END":
+				switch tokens[idx+1].AsUpper() {
+				case "IF", "CASE", "LOOP":
+					combineNext = true
+				}
+			case "GROUP", "ORDER", "PARTITION":
+				switch tokens[idx+1].AsUpper() {
+				case "BY":
+					combineNext = true
+				}
+			case "FROM":
+				switch tokens[idx+1].AsUpper() {
+				case "DISTINCT":
+					combineNext = true
+				}
+			case "FOR":
+				switch tokens[idx+1].AsUpper() {
+				case "UPDATE":
+					combineNext = true
+				}
+			case "ON":
+				switch tokens[idx+1].AsUpper() {
+				case "CONFLICT":
+					combineNext = true
+				}
+			case "MERGE":
+				switch tokens[idx+1].AsUpper() {
+				case "INTO":
+					combineNext = true
+				}
+			}
+
+			if combineNext {
+				nTok := tokens[idx+1]
+				ntVal := nTok.AsUpper()
+
+				cTok.value = cTok.value + " " + ntVal
+				skipNext = true
+
+				if len(nTok.ledComments) > 0 {
+					cTok.AddTrailingComment(nTok.ledComments...)
+				}
+				if len(nTok.trlComments) > 0 {
+					cTok.AddTrailingComment(nTok.trlComments...)
+				}
+			}
+		}
+
+		ret = append(ret, cTok)
+	}
+
+	return ret
+}
+
 // consolidateDatatypes consolidates tokens that make up a datatype declaration
 // by combining them into a single token.
-func consolidateDatatypes(e *env.Env, parsed []parser.Token) []parser.Token {
+func consolidateDatatypes(e *env.Env, tokens []FmtToken) []FmtToken {
 
-	var conToks []parser.Token
+	var ret []FmtToken
 
-	idxMax := len(parsed) - 1
+	idxMax := len(tokens) - 1
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		tc := parsed[idx]
+		cTok := tokens[idx]
 
-		switch tc.Category() {
+		switch cTok.categoryOf {
 		case parser.Comment, parser.String, parser.Punctuation, parser.Data, parser.Other:
-			conToks = append(conToks, tc)
+			ret = append(ret, cTok)
 			continue
 		}
 
 		idxEnd := min(idxMax, idx+8)
 
 		if idxEnd == idx {
-			conToks = append(conToks, tc)
+			ret = append(ret, cTok)
 			continue
 		}
 
@@ -136,51 +293,45 @@ func consolidateDatatypes(e *env.Env, parsed []parser.Token) []parser.Token {
 		dtLen := 0
 
 		for i := 1; i <= idxLen; i++ {
-			switch parsed[idx+i].Category() {
+			switch tokens[idx+i].categoryOf {
 			case parser.Comment, parser.String, parser.Data:
 				break
 			}
-			switch parsed[idx+i].Type() {
+			switch tokens[idx+i].typeOf {
 			case parser.BindParameter, parser.Label, parser.Operator, parser.NullItem, parser.WhiteSpace:
 				break
 			}
 
-			if isDatatype(e, parsed[idx : idx+i]) {
+			if isDatatype(e, tokens[idx:idx+i]) {
 				dtLen = max(dtLen, i)
 			}
 		}
 
 		if dtLen > 1 {
-			dts := asDatatypeString(parsed[idx : idx+dtLen])
-			nt, _ := parser.NewToken(dts, parser.Datatype)
-
-			nt.SetVSpace(parsed[idx].VSpace())
-			nt.SetHSpace(parsed[idx].HSpace())
-
-			conToks = append(conToks, nt)
-			idx += dtLen-1
-		} else {
-			conToks = append(conToks, tc)
+			dts := asDatatypeString(tokens[idx : idx+dtLen])
+			cTok.value = dts
+			idx += dtLen - 1
 		}
+		ret = append(ret, cTok)
 	}
-	return conToks
+	return ret
 }
 
-func isDatatype(e *env.Env, s []parser.Token) bool {
+func isDatatype(e *env.Env, s []FmtToken) bool {
 	dbdialect := dialect.NewDialect(e.DialectName())
 	var ary []string
 	for _, t := range s {
-		ary = append(ary, t.Value())
+		ary = append(ary, t.value)
 	}
 	return dbdialect.IsDatatype(ary...)
 }
 
-func asDatatypeString(s []parser.Token) string {
+func asDatatypeString(s []FmtToken) string {
 	var z []string
 	pv := ""
 
 	for _, t := range s {
-		v := t.Value()
+		v := t.value
 		switch v {
 		case "(":
 			z = append(z, " "+v)
@@ -199,7 +350,7 @@ func asDatatypeString(s []parser.Token) string {
 	return strings.Join(z, "")
 }
 
-func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
+func prepParsed(e *env.Env, parsed []parser.Token) (ret []FmtToken) {
 
 	dbdialect := dialect.NewDialect(e.DialectName())
 
@@ -210,22 +361,19 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 	// 4. Perform case folding of identifiers, datatypes, and keywords as
 	//      specified in the env
 
-	p2 := consolidateDatatypes(e, parsed)
+	p1 := stashComments(e, parsed)
+	p2 := consolidateDatatypes(e, p1)
+	p3 := consolidateMWTokens(e, p2)
 
-	idxMax := len(p2) - 1
+	idxMax := len(p3) - 1
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := p2[idx]
+		cTok := p3[idx]
 
-		tText := cTok.Value()
-		tType := cTok.Type()
-		tCategory := cTok.Category()
-
-		if tType == parser.WhiteSpace {
-			// We just don't care about the trailing whitespace
-			continue
-		}
+		tText := cTok.value
+		tType := cTok.typeOf
+		tCategory := cTok.categoryOf
 
 		switch tCategory {
 		case parser.Identifier:
@@ -279,36 +427,17 @@ func prepParsed(e *env.Env, parsed []parser.Token) (cleaned []FmtToken) {
 
 		switch tType {
 		case parser.Identifier, parser.Datatype, parser.Keyword:
-/*
-			switch e.Dialect() {
-			case dialect.PostgreSQL:
-				// Check, and tweak the tokens, for arrays
-				if idx+2 < idxMax {
-					if parsed[idx+1].Value() == "[" && parsed[idx+2].Value() == "]" {
-						tText += "[]"
-						idx += 2
-						if tType == parser.Keyword {
-							tCategory = parser.Identifier
-							tType = parser.Identifier
-						}
-					}
-				}
-			}
-			*/
 			tText = strings.ToLower(tText)
 		}
 
-		cleaned = append(cleaned, FmtToken{
-			id:         idx,
-			categoryOf: tCategory,
-			typeOf:     tType,
-			value:      tText,
-			vSpaceOrig: cTok.VSpace(),
-			hSpaceOrig: cTok.HSpace(),
-		})
+		cTok.id = idx
+		cTok.categoryOf = tCategory
+		cTok.typeOf = tType
+		cTok.value = tText
+		ret = append(ret, cTok)
 	}
 
-	return cleaned
+	return ret
 }
 
 func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
@@ -349,21 +478,21 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 		pTok = cTok
 		mainTokens = append(mainTokens, cTok)
 	}
-
-	parensDepth = 0
-	for _, cTok := range mainTokens {
-		switch cTok.value {
-		case "(":
-			parensDepth++
-		case ")":
-			parensDepth--
-		default:
-			if cTok.IsBag() {
-				AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
+	/*
+		parensDepth = 0
+		for _, cTok := range mainTokens {
+			switch cTok.value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			default:
+				if cTok.IsBag() {
+					AdjustLineWrapping(e, bagMap, cTok.typeOf, cTok.id, parensDepth)
+				}
 			}
 		}
-	}
-
+	*/
 	return mainTokens
 }
 
@@ -392,77 +521,85 @@ func formatBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInden
 	}
 }
 
-func untagBags(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
+func commentsToTokens(toks []CmtToken) []FmtToken {
 
-	tl1 := m
-	guard := 0
-
-	// Iterate for as long as there are mapped bags to accommodate nested DML and PL
-	found := true
-	for found {
-		found = false
-
-		tl2 := make([]FmtToken, 0)
-
-		for _, cTok := range tl1 {
-
-			if cTok.IsBag() {
-
-				// get the key
-				// look up the key in the map
-				// copy the tokens from the map
-				key := bagKey(cTok.typeOf, cTok.id)
-
-				tb, ok := bagMap[key]
-				if ok {
-					for _, line := range tb.lines {
-
-						tl2 = append(tl2, line...)
-					}
-					found = true
-				} else {
-					tl2 = append(tl2, cTok)
-				}
-
-			} else {
-				tl2 = append(tl2, cTok)
-			}
-		}
-
-		guard++
-		if guard > 20 {
-			// 1. Do we want to retain the guard?
-			// 2. Is 20 a reasonable guard limit?
-			// 3. If the guard is exceeded then should we log this?
-			found = false
-		}
-
-		tl1 = tl2
-
+	var ret []FmtToken
+	for _, cTok := range toks {
+		ret = append(ret, FmtToken{
+			categoryOf: parser.Comment,
+			typeOf:     cTok.typeOf,
+			value:      cTok.value,
+			vSpace:     cTok.vSpace,
+			hSpace:     cTok.hSpace,
+			indents:    cTok.indents,
+		})
 	}
-	return tl1
+	return ret
 }
 
-func combineTokens(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) string {
+func unpackTokens(toks ...FmtToken) []FmtToken {
+	var ret []FmtToken
 
-	tokens := untagBags(m, bagMap)
+	for _, cTok := range toks {
+		if len(cTok.ledComments) > 0 {
+			ret = append(ret, commentsToTokens(cTok.ledComments)...)
+			cTok.ledComments = nil
+		}
+		ret = append(ret, cTok)
+		if len(cTok.trlComments) > 0 {
+			ret = append(ret, commentsToTokens(cTok.trlComments)...)
+			cTok.trlComments = nil
+		}
+	}
+
+	return ret
+}
+
+func untagBags(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
+
+	var ret []FmtToken
+
+	for _, cTok := range m {
+
+		switch {
+		case cTok.IsBag():
+
+			// get the key
+			// look up the key in the map
+			// copy the tokens from the map
+			key := bagKey(cTok.typeOf, cTok.id)
+
+			tb, ok := bagMap[key]
+			if ok {
+				for _, line := range tb.lines {
+					ret = append(ret, untagBags(line, bagMap)...)
+				}
+			} else {
+				ret = append(ret, unpackTokens(cTok)...)
+			}
+		default:
+			ret = append(ret, unpackTokens(cTok)...)
+		}
+	}
+	return ret
+}
+
+func combineTokens(e *env.Env, tokens []FmtToken) string {
 
 	var z []string
 
-	for _, tc := range tokens {
-		if tc.vSpace > 0 {
-			z = append(z, strings.Repeat("\n", tc.vSpace))
-			if tc.indents > 0 {
-				z = append(z, strings.Repeat(e.Indent(), tc.indents))
+	for _, cTok := range tokens {
+		if cTok.vSpace > 0 {
+			z = append(z, strings.Repeat("\n", cTok.vSpace))
+			if cTok.indents > 0 {
+				z = append(z, strings.Repeat(e.Indent(), cTok.indents))
 			}
-		} else if tc.hSpace != "" {
-			z = append(z, tc.hSpace)
+		} else if cTok.hSpace != "" {
+			z = append(z, cTok.hSpace)
 		}
 
-		z = append(z, tc.value)
+		z = append(z, cTok.value)
 	}
 
-	z = append(z, "\n")
-
-	return strings.Join(z, "")
+	return strings.TrimSpace(strings.Join(z, "")) + "\n"
 }
