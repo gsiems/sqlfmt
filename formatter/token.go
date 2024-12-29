@@ -9,7 +9,7 @@ import (
 	"github.com/gsiems/sqlfmt/parser"
 )
 
-type FmtToken struct {
+type CmtToken struct {
 	id         int    // the ID of the token
 	categoryOf int    // the category of token
 	typeOf     int    // the type of token
@@ -17,8 +17,34 @@ type FmtToken struct {
 	indents    int    // the count of indentations preceding the token
 	hSpace     string // the non-indentation horizontal white-space preceding the token
 	value      string // the non-white-space text of the token
-	vSpaceOrig int    // the original preceding vertical white-space value as parsed
-	hSpaceOrig string // the original preceding horizontal white-space value as parsed
+}
+
+func (t *CmtToken) AdjustIndents(i int) {
+	switch {
+	case i <= 0:
+		t.indents = 0
+	default:
+		if t.vSpace > 0 {
+			t.indents = i
+			t.hSpace = ""
+		} else {
+			t.indents = 0
+		}
+	}
+}
+
+type FmtToken struct {
+	id          int        // the ID of the token
+	categoryOf  int        // the category of token
+	typeOf      int        // the type of token
+	vSpace      int        // the count of line-feeds (vertical space) preceding the token
+	indents     int        // the count of indentations preceding the token
+	hSpace      string     // the non-indentation horizontal white-space preceding the token
+	value       string     // the non-white-space text of the token
+	vSpaceOrig  int        // the original preceding vertical white-space value as parsed
+	hSpaceOrig  string     // the original preceding horizontal white-space value as parsed
+	trlComments []CmtToken // Trailing (end of line) comment(s)
+	ledComments []CmtToken // Leading comments
 }
 
 // AsUpper returns the token value as upper-case, mostly for comparison purposes
@@ -32,6 +58,33 @@ func (t *FmtToken) IsBag() bool {
 		return true
 	}
 	return false
+}
+func (t *FmtToken) IsUnpackedBag() bool {
+	switch t.typeOf {
+	case UnpackedBag:
+		return true
+	}
+	return false
+}
+
+func (t *FmtToken) HasLeadingComments() bool {
+	return len(t.ledComments) > 0
+}
+
+func (t *FmtToken) HasTrailingComments() bool {
+	return len(t.trlComments) > 0
+}
+
+func (t *FmtToken) AddLeadingComment(toks ...CmtToken) {
+	for _, tok := range toks {
+		t.ledComments = append(t.ledComments, tok)
+	}
+}
+
+func (t *FmtToken) AddTrailingComment(toks ...CmtToken) {
+	for _, tok := range toks {
+		t.trlComments = append(t.trlComments, tok)
+	}
 }
 
 func (t *FmtToken) IsCodeComment() bool {
@@ -86,6 +139,13 @@ func (t *FmtToken) AdjustIndents(i int) {
 			t.indents = 0
 		}
 	}
+
+	for idx, _ := range t.trlComments {
+		t.trlComments[idx].AdjustIndents(i)
+	}
+	for idx, _ := range t.ledComments {
+		t.ledComments[idx].AdjustIndents(i)
+	}
 }
 
 func (t *FmtToken) AdjustHSpace(e *env.Env, pTok FmtToken) {
@@ -101,12 +161,12 @@ func (t *FmtToken) AdjustHSpace(e *env.Env, pTok FmtToken) {
 	}
 
 	switch t.value {
-		case ",", ".." :
+	case ",", "..":
 		t.hSpace = ""
 		return
 	}
 	switch pTok.value {
-		case ".." :
+	case "..":
 		t.hSpace = ""
 		return
 	}
@@ -148,9 +208,9 @@ func (t *FmtToken) AdjustHSpace(e *env.Env, pTok FmtToken) {
 
 func (t *FmtToken) AdjustVSpace(ensureVSpace, honorVSpace bool) {
 	switch {
-	case t.id == 0:
-		// very first token
-		t.vSpace = 0
+	//case t.id == 0:
+	//	// very first token
+	//	t.vSpace = 0
 	case ensureVSpace:
 		t.EnsureVSpace()
 	case honorVSpace:
