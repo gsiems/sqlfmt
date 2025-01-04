@@ -321,97 +321,99 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		}
 	}
 
-	////////////////////////////////////////////////////////////////////
-	// Tag case structures
-	var ids []int
+	/*
+		////////////////////////////////////////////////////////////////////
+		// Tag case structures
+		var ids []int
+	*/
 	typMap := make(map[int]int) // map[bagID]BagType
-	for id, _ := range tokMap {
-		ids = append(ids, id)
-		typMap[id] = DMLBag
-	}
+	/*
+		for id, _ := range tokMap {
+			ids = append(ids, id)
+			typMap[id] = DMLBag
+		}
 
-	for _, baseBagId := range ids {
+		for _, baseBagId := range ids {
 
-		//bagTokens := tokMap[baseBagId]
-		caseIds := make(map[int]int) // map[caseDepth]bagId
-		caseDepth := 0
-		caseBagId := 0
-		var newBagTokens []FmtToken
+			//bagTokens := tokMap[baseBagId]
+			caseIds := make(map[int]int) // map[caseDepth]bagId
+			caseDepth := 0
+			caseBagId := 0
+			var newBagTokens []FmtToken
 
-		for _, cTok := range tokMap[baseBagId] {
+			for _, cTok := range tokMap[baseBagId] {
 
-			switch cTok.AsUpper() {
-			case "CASE":
+				switch cTok.AsUpper() {
+				case "CASE":
 
-				nt := FmtToken{
-					id:         cTok.id,
-					categoryOf: DMLBag,
-					typeOf:     DMLCaseBag,
-					vSpace:     cTok.vSpace,
-					indents:    cTok.indents,
-					hSpace:     cTok.hSpace,
-					vSpaceOrig: cTok.vSpaceOrig,
-					hSpaceOrig: cTok.hSpaceOrig,
-				}
+					nt := FmtToken{
+						id:         cTok.id,
+						categoryOf: DMLBag,
+						typeOf:     DMLCaseBag,
+						vSpace:     cTok.vSpace,
+						indents:    cTok.indents,
+						hSpace:     cTok.hSpace,
+						vSpaceOrig: cTok.vSpaceOrig,
+						hSpaceOrig: cTok.hSpaceOrig,
+					}
 
-				caseDepth++
-				switch {
-				case caseDepth == 1:
-					newBagTokens = append(newBagTokens, nt)
-				case caseDepth > 1:
-					tokMap[caseBagId] = append(tokMap[caseBagId], nt)
-				}
+					caseDepth++
+					switch {
+					case caseDepth == 1:
+						newBagTokens = append(newBagTokens, nt)
+					case caseDepth > 1:
+						tokMap[caseBagId] = append(tokMap[caseBagId], nt)
+					}
 
-				caseBagId = cTok.id
-				caseIds[caseDepth] = caseBagId
-				typMap[caseBagId] = DMLCaseBag
-				tokMap[caseBagId] = append(tokMap[caseBagId], cTok)
-
-			case "END":
-
-				tokMap[caseBagId] = append(tokMap[caseBagId], cTok)
-				if _, ok := bagIds[caseDepth]; ok {
-					delete(bagIds, caseDepth)
-				}
-				caseDepth--
-				caseBagId = caseIds[caseDepth]
-				if caseDepth <= 0 {
-					// Reset the bag IDs in case there are more CASE statements to tag
-					caseBagId = 0
-					caseDepth = 0
-					caseIds = nil
-					caseIds = make(map[int]int)
-				}
-
-			default:
-				if caseDepth > 0 {
+					caseBagId = cTok.id
+					caseIds[caseDepth] = caseBagId
+					typMap[caseBagId] = DMLCaseBag
 					tokMap[caseBagId] = append(tokMap[caseBagId], cTok)
-				} else {
-					newBagTokens = append(newBagTokens, cTok)
+
+				case "END":
+
+					tokMap[caseBagId] = append(tokMap[caseBagId], cTok)
+					if _, ok := bagIds[caseDepth]; ok {
+						delete(bagIds, caseDepth)
+					}
+					caseDepth--
+					caseBagId = caseIds[caseDepth]
+					if caseDepth <= 0 {
+						// Reset the bag IDs in case there are more CASE statements to tag
+						caseBagId = 0
+						caseDepth = 0
+						caseIds = nil
+						caseIds = make(map[int]int)
+					}
+
+				default:
+					if caseDepth > 0 {
+						tokMap[caseBagId] = append(tokMap[caseBagId], cTok)
+					} else {
+						newBagTokens = append(newBagTokens, cTok)
+					}
 				}
 			}
+			tokMap[baseBagId] = newBagTokens
 		}
-		tokMap[baseBagId] = newBagTokens
-	}
-
+	*/
 	////////////////////////////////////////////////////////////////////
 	// If the token map is not empty (DML was found and tagged) then populate
 	// the bagMap
 	for bagId, bagTokens := range tokMap {
 
 		typ := DMLBag
+
 		if t, ok := typMap[bagId]; ok {
 			typ = t
 		}
 
 		key := bagKey(typ, bagId)
-		var lines [][]FmtToken
-		lines = append(lines, bagTokens)
 
 		bagMap[key] = TokenBag{
 			id:     bagId,
 			typeOf: typ,
-			lines:  lines,
+			tokens: bagTokens,
 		}
 	}
 
@@ -437,19 +439,20 @@ func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		case "ALL", "AND", "ANY", "AS", "ASC", "BETWEEN", "BY", "CASCADE",
 			"CASE", "COLLATE", "CONCURRENTLY", "CONFLICT", "CONSTRAINT",
 			"CROSS", "CURRENT", "DATA", "DELETE", "DESC", "DISTINCT", "DO",
-			"ELSE", "END", "EXCEPT", "EXISTS", "FETCH", "FIRST", "FOR", "FROM",
-			"FULL", "GROUP", "HAVING", "IDENTITY", "IN", "INNER", "INSERT",
-			"INTERSECT", "INTO", "IS", "JOIN", "LAST", "LATERAL", "LEFT",
-			"LIKE", "LIMIT", "MATCHED", "MATERIALIZED", "MERGE", "MINUS",
-			"NATURAL", "NEXT", "NFC", "NFD", "NFKC", "NFKD", "NO",
-			"NORMALIZED", "NOT", "NOTHING", "NOWAIT", "NULL", "NULLS", "OF",
-			"OFFSET", "ON", "ONLY", "OR", "ORDER", "OUTER", "OVER",
-			"OVERRIDING", "PARTITION", "RECURSIVE", "REFRESH", "REINDEX",
-			"RESTART", "RETURNING", "RIGHT", "ROW", "ROWS", "SELECT", "SET",
-			"SHARE", "SOURCE", "SYSTEM", "TABLE", "TARGET", "TEMP",
-			"TEMPORARY", "THEN", "TRUNCATE", "UNION", "UNLOGGED", "UPDATE",
-			"UPSERT", "USING", "VALUE", "VALUES", "VIEW", "WHEN", "WHERE",
-			"WINDOW", "WITH", "WITHIN":
+			"ELSE", "END", "EXCEPT", "EXISTS", "FETCH", "FIRST", "FOR",
+			"FOR UPDATE", "FROM", "FULL", "GROUP", "HAVING", "IDENTITY", "IN",
+			"INNER", "INSERT", "INTERSECT", "INTO", "IS", "JOIN", "LAST",
+			"LATERAL", "LEFT", "LIKE", "LIMIT", "MATCHED", "MATERIALIZED",
+			"MERGE", "MINUS", "NATURAL", "NEXT", "NFC", "NFD", "NFKC", "NFKD",
+			"NO", "NORMALIZED", "NOT", "NOTHING", "NOWAIT", "NULL", "NULLS",
+			"OF", "OFFSET", "ON", "ON CONFLICT", "ONLY", "OR", "ORDER",
+			"ORDER BY", "OUTER", "OVER", "OVERRIDING", "PARTITION",
+			"PARTITION BY", "RECURSIVE", "REFRESH", "REINDEX", "RESTART",
+			"RETURNING", "RIGHT", "ROW", "ROWS", "SELECT", "SET", "SHARE",
+			"SOURCE", "SYSTEM", "TABLE", "TARGET", "TEMP", "TEMPORARY", "THEN",
+			"TRUNCATE", "UNION", "UNLOGGED", "UPDATE", "UPSERT", "USING",
+			"VALUE", "VALUES", "VIEW", "WHEN", "WHERE", "WINDOW", "WITH",
+			"WITHIN", "GROUP BY":
 
 			if cTok.IsKeyword() {
 				cTok.SetUpper()
@@ -485,26 +488,26 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
-	if len(b.lines) == 0 {
+	if len(b.tokens) == 0 {
 		return
 	}
 
-	line := formatDMLKeywords(e, b.lines[0])
+	tokens := formatDMLKeywords(e, b.tokens)
 
 	cat := newFmtStat()
-	idxMax := len(line) - 1
+	idxMax := len(tokens) - 1
 	indents := baseIndents
 	onConflict := false
 
 	var tFormatted []FmtToken
-	var pTok FmtToken  // The previous token
-	var pNcVal string  // The upper case value of the previous non-comment token
-	var ppNcVal string // The upper case value of the previous to the previous non-comment token
-	var pKwVal string  // The upper case value of the previous keyword token
+	var pTok FmtToken // The previous token
+	var pNcVal string // The upper case value of the previous non-comment token
+	//var ppNcVal string // The upper case value of the previous to the previous non-comment token
+	var pKwVal string // The upper case value of the previous keyword token
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := line[idx]
+		cTok := tokens[idx]
 		ctVal := cTok.AsUpper()
 
 		////////////////////////////////////////////////////////////////
@@ -513,43 +516,17 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		case 0:
 
 			switch ctVal {
-			case "SELECT", "INSERT", "UPSERT", "DELETE", "MERGE",
-				"REFRESH", "REINDEX", "TRUNCATE", "WITH":
+			case "DELETE", "FROM", "GROUP BY", "HAVING", "INSERT", "INTERSECT",
+				"JOIN", "MERGE", "MINUS", "ORDER BY", "REFRESH", "REINDEX",
+				"RETURNING", "SELECT", "SET", "TRUNCATE", "UNION", "UPDATE",
+				"UPSERT", "VALUES", "WHERE", "WITH":
 
 				cat.updateClause(ctVal)
 
-			case "UPDATE":
-				switch pNcVal {
-				case "FOR":
-				// nada
-				default:
-					cat.updateClause(ctVal)
-				}
-
-			case "FROM":
-				switch {
-				case pNcVal == "DISTINCT":
-					// nada
-				default:
-					cat.updateClause(ctVal)
-				}
-
-			case "HAVING", "INTERSECT", "JOIN", "MINUS",
-				"ORDER", "RETURNING", "SET", "UNION", "VALUES", "WHERE":
-
-				cat.updateClause(ctVal)
-
-			case "CONFLICT":
+			case "ON CONFLICT":
 				onConflict = true
-
 				cat.updateClause(ctVal)
 
-			case "GROUP":
-				//switch pNcVal {
-				//case "WITHIN":
-				//default:
-				cat.updateClause(ctVal)
-				//}
 			}
 		default:
 			switch ctVal {
@@ -568,17 +545,9 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			ensureVSpace = forceInitVSpace
 		}
 
-		// get the next non-comment token...
-		//var nNcTok FmtToken
-		var nNcVal string
-
-		if idx+1 < idxMax {
-			for j := idx + 1; j <= idxMax; j++ {
-				if !line[j].IsCodeComment() {
-					nNcVal = line[j].AsUpper()
-					break
-				}
-			}
+		nNcVal := ""
+		if idx < idxMax {
+			nNcVal = tokens[idx+1].AsUpper()
 		}
 
 		switch cat.parensDepth() {
@@ -594,7 +563,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				"INSERT", "INTERSECT", "LEFT", "LIMIT", "MERGE", "MINUS",
 				"NATURAL", "OFFSET", "ORDER", "REFRESH", "REINDEX",
 				"RETURNING", "RIGHT", "SELECT", "TRUNCATE", "UNION", "UPSERT",
-				"USING":
+				"USING", "GROUP BY", "ORDER BY":
 
 				ensureVSpace = true
 
@@ -610,22 +579,14 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				}
 
 			case "UPDATE":
-				switch pNcVal {
-				//case "DO":
-				case "FOR":
-					// nada
-				default:
-					ensureVSpace = true
-				}
+				ensureVSpace = true
 
-			case "FOR":
-				if nNcVal == "UPDATE" {
-					ensureVSpace = true
-				}
+			case "FOR UPDATE", "ON CONFLICT":
+				ensureVSpace = true
 
 			case "ON":
-				switch pNcVal {
-				case "CONFLICT":
+				switch nNcVal {
+				case "CONSTRAINT":
 					// nada
 				default:
 					ensureVSpace = true
@@ -704,33 +665,36 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				}
 			}
 
-			switch pNcVal {
-			case ",":
-				switch {
-				case cTok.IsCodeComment():
-					honorVSpace = true
-				case cat.primaryAction() == "TRUNCATE":
-					// nada
-				default:
-					ensureVSpace = true
-				}
-			}
-
-		case 1:
-			if cat.primaryAction() == "INSERT" {
-				switch cat.currentClause() {
-				case "INSERT":
-					switch pNcVal {
-					case ",", "(":
-						ensureVSpace = true
-					}
-				case "VALUES":
-					switch pNcVal {
-					case ",", "(":
-						ensureVSpace = true
+			/*
+				switch pNcVal {
+				case ",":
+					switch {
+					//case cTok.IsCodeComment():
+					//	honorVSpace = true
+					case cat.primaryAction() == "TRUNCATE":
+						// nada
+					case cat.currentClause() == "VALUES":
+						// nada
+					//default:
+					//	ensureVSpace = true
 					}
 				}
-			}
+			*/
+			//case 1:
+			//	if cat.primaryAction() == "INSERT" {
+			//		switch cat.currentClause() {
+			//		case "INSERT":
+			//			switch pNcVal {
+			//			case ",", "(":
+			//				ensureVSpace = true
+			//			}
+			//		//case "VALUES":
+			//		//	switch pNcVal {
+			//		//	case ",", "(":
+			//		//		ensureVSpace = true
+			//		//	}
+			//		}
+			//	}
 		}
 
 		switch cat.currentClause() {
@@ -743,59 +707,116 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					ensureVSpace = true
 				}
 			}
+			switch pTok.value {
+			case ",":
+				if cat.parensDepth() == 0 {
+					ensureVSpace = true
+				}
+			}
+
 		case "VALUES":
 			switch ctVal {
-			case "VALUES":
-				if pNcVal != "DEFAULT" {
-					ensureVSpace = true
-				}
-			case "(":
-				switch {
-				case e.Dialect() == dialect.Oracle:
-					// nada-- Oracle only allows one tuple per insert
-				case pNcVal == "VALUES":
-					// nada
-				case pNcVal == ",":
-					ensureVSpace = true
-				default:
-					// nada
-				}
+			case cat.currentClause():
+				ensureVSpace = true
 			case ")":
 				if nNcVal == "AS" {
 					ensureVSpace = true
 				}
-			default:
-				if pNcVal == "," && ppNcVal == ")" {
+			}
+
+		case "SELECT", "SET", "GROUP BY", "ORDER BY":
+			switch pTok.value {
+			case ",":
+				if cat.parensDepth() == 0 {
 					ensureVSpace = true
 				}
 			}
+
+			//ensureVSpace = true
+			//case "(":
+			//	switch {
+			//	case e.Dialect() == dialect.Oracle:
+			//		// nada-- Oracle only allows one tuple per insert
+			//	case pNcVal == "VALUES":
+			//		// nada
+			//	case pNcVal == ",":
+			//		ensureVSpace = true
+			//	default:
+			//		// nada
+			//	}
+			//			switch ctVal {
+			//			case ")":
+			//				if nNcVal == "AS" {
+			//					ensureVSpace = true
+			//				}
+			//				//default:
+			//				//	if pNcVal == "," && ppNcVal == ")" {
+			//				//		ensureVSpace = true
+			//				//	}
+			//			}
 		case "WHERE", "JOIN":
-			switch ctVal {
-			case "OR":
+
+			if isLogical(pKwVal, cTok) {
 				ensureVSpace = true
-			case "AND":
-				if pKwVal != "BETWEEN" {
-					ensureVSpace = true
-				}
 			}
+
+			//switch ctVal {
+			//case "OR":
+			//	ensureVSpace = true
+			//case "AND":
+			//	if pKwVal != "BETWEEN" {
+			//		ensureVSpace = true
+			//	}
+			//}
 		}
 
-		switch ctVal {
-		case ";":
-			switch pTok.IsCodeComment() {
-			case false:
-				ensureVSpace = false
-				honorVSpace = false
+		/*
+			switch ctVal {
+			case ";":
+				switch pTok.HasTrailingComments() {
+				case true:
+				ensureVSpace = true
+				case false:
+					ensureVSpace = false
+					honorVSpace = false
+				}
+			default:
+				switch {
+				case cTok.HasLeadingComments(), cTok.IsBag():
+					//ensureVSpace = false
+					honorVSpace = true
+				case cTok.IsCodeComment(), cTok.IsBag():
+					//ensureVSpace = false
+					honorVSpace = true
+				case pTok.HasTrailingComments(), pTok.IsBag():
+					//ensureVSpace = false
+					honorVSpace = true
+				case pTok.HasTrailingComments(), pTok.IsBag():
+					//ensureVSpace = false
+					honorVSpace = true
+				}
 			}
-		default:
-			switch {
-			case cTok.IsCodeComment(), cTok.IsBag():
-				//ensureVSpace = false
-				honorVSpace = true
-			case pTok.IsCodeComment(), pTok.IsBag():
-				//ensureVSpace = false
-				honorVSpace = true
+		*/
+
+		switch {
+		case pTok.IsBag():
+			bk := bagKey(pTok.typeOf, pTok.id)
+			b, ok := bagMap[bk]
+			if ok {
+				switch {
+				case b.HasTrailingComments():
+					ensureVSpace = true
+					//default:
+					//	switch ctVal {
+					//	case ")", ";":
+					//			honorVSpace = true
+					//	default:
+					//		honorVSpace = true
+					//	}
+				}
 			}
+		case pTok.HasTrailingComments():
+			ensureVSpace = true
 		}
 
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
@@ -821,7 +842,9 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				case "SELECT", "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
 					// nada
 				case "INTO", "FROM", "WHERE", "GROUP", "HAVING", "WINDOW", "ORDER",
-					"OFFSET", "LIMIT", "FETCH", "FOR", "WITH":
+					"OFFSET", "LIMIT", "FETCH", "FOR", "WITH", "FOR UPDATE":
+					localIndents = 1
+				case "GROUP BY", "ORDER BY", "PARTITION BY":
 					localIndents = 1
 				case "CROSS", "FULL", "INNER", "JOIN", "LATERAL", "LEFT",
 					"NATURAL", "OUTER", "RIGHT":
@@ -849,17 +872,15 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					case "FROM", "WHERE", "GROUP", "HAVING", "WINDOW", "ORDER",
 						"OFFSET", "LIMIT", "FETCH", "FOR", "WITH", "RETURNING":
 						localIndents = 2
+					case "GROUP BY", "ORDER BY":
+						localIndents = 2
 					case "CROSS", "FULL", "INNER", "JOIN", "LATERAL", "LEFT",
 						"NATURAL", "OUTER", "RIGHT":
 						localIndents = 2
-					case "VALUES":
+					case "VALUES", "ON CONFLICT":
 						localIndents = 2
 					case "ON":
-						if nNcVal == "CONFLICT" {
-							localIndents = 2
-						} else {
-							localIndents = 3
-						}
+						localIndents = 3
 					case ")":
 						localIndents = 2
 					default:
@@ -875,6 +896,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					switch {
 					case onConflict:
 						switch ctVal {
+						case "ON CONFLICT":
+							localIndents = 1
 						case "UPDATE", "DELETE":
 							localIndents = 2
 						case "SET", "WHERE":
@@ -958,7 +981,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				bagIndent++
 			default:
 				switch cat.currentClause() {
-				case "SELECT", "WHERE", "GROUP", "ORDER":
+				case "SELECT", "WHERE", "GROUP", "ORDER", "GROUP BY", "ORDER BY":
 					bagIndent += 2
 				default:
 					bagIndent++
@@ -1053,7 +1076,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		// Set the various "previous token" values
 		pTok = cTok
 		if !cTok.IsCodeComment() {
-			ppNcVal = pNcVal
+			//ppNcVal = pNcVal
 			pNcVal = ctVal
 		}
 		if cTok.IsKeyword() {
@@ -1063,25 +1086,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	var newLines [][]FmtToken
-	newLines = append(newLines, tFormatted)
-	/*
-		var newLine []FmtToken
-
-		for _, cTok := range tFormatted {
-			if cTok.vSpace > 0 {
-				if len(newLine) > 0 {
-					newLines = append(newLines, newLine)
-					newLine = nil
-				}
-			}
-			newLine = append(newLine, cTok)
-		}
-		if len(newLine) > 0 {
-			newLines = append(newLines, newLine)
-		}
-	*/
+	wt := wrapLines(e, DMLBag, tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)
 }

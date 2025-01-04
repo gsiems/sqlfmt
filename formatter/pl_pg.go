@@ -316,13 +316,11 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		}
 
 		key := bagKey(typ, bagId)
-		var lines [][]FmtToken
-		lines = append(lines, bagTokens)
 
 		bagMap[key] = TokenBag{
 			id:     bagId,
 			typeOf: typ,
-			lines:  lines,
+			tokens: bagTokens,
 		}
 	}
 
@@ -338,13 +336,15 @@ func formatPgPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInde
 	}
 }
 
-func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) string {
+func pgParamLabel(objType, paramLabel string, pTok, cTok, nTok FmtToken) string {
 
 	ctVal := cTok.AsUpper()
+	ptVal := pTok.AsUpper()
+	ntVal := nTok.AsUpper()
 
 	switch objType {
 	case "TRIGGER":
-		if pNcVal == objType {
+		if ptVal == objType {
 			return "NAME"
 		}
 
@@ -356,7 +356,7 @@ func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) str
 		case "ON":
 			return "TABLE"
 		case "NOT":
-			if nNcVal == "DEFERRABLE" {
+			if ntVal == "DEFERRABLE" {
 				return "DEFERRABLE"
 			}
 		case "DEFERRABLE", "INITIALLY":
@@ -366,7 +366,7 @@ func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) str
 		}
 
 	default:
-		switch pNcVal {
+		switch ptVal {
 		case objType:
 			return "NAME"
 		default:
@@ -380,7 +380,7 @@ func pgParamLabel(objType, paramLabel, pNcVal, nNcVal string, cTok FmtToken) str
 			case "RETURNS":
 				if paramLabel == "SIGNATURE" {
 					return "RETURNS"
-				} else if nNcVal == "NULL" {
+				} else if ntVal == "NULL" {
 					return "CALLING MODE"
 				}
 			case "LANGUAGE", "TRANSFORM", "PARALLEL", "COST", "ROWS", "SET", "AS":
@@ -418,39 +418,36 @@ func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		return tokens
 	}
 
-	var ret []FmtToken
-	var pNcVal string
+	idxMax := len(tokens) - 1
 
-	for _, cTok := range tokens {
+	for idx := 0; idx <= idxMax; idx++ {
 
-		ctVal := cTok.AsUpper()
-
-		switch ctVal {
+		switch tokens[idx].AsUpper() {
 		case "AND", "ANY", "AS", "ATOMIC", "BEGIN", "BREAK", "CASE", "CLOSE",
 			"CONCURRENTLY", "CONTINUE", "DECLARE", "DISTINCT", "ELSE",
-			"ELSEIF", "ELSIF", "END", "EXECUTE", "EXCEPTION", "EXISTS", "EXIT",
-			"FETCH", "FOR", "FOREACH", "FOUND", "FROM", "GET", "IF", "IN",
-			"INTO", "IS", "LIKE", "LOOP", "MATERIALIZED", "NEXT", "NOT",
-			"NULL", "OPEN", "OR", "QUERY", "RAISE", "REFRESH", "RETURN",
-			"SETOF", "THEN", "VIEW", "WHEN", "WHILE":
+			"ELSEIF", "ELSIF", "END", "END CASE", "END IF", "END LOOP",
+			"EXECUTE", "EXCEPTION", "EXISTS", "EXIT", "FETCH", "FOR",
+			"FOREACH", "FOUND", "FROM", "GET", "IF", "IN", "INTO", "IS",
+			"LIKE", "LOOP", "MATERIALIZED", "NEXT", "NOT", "NULL", "OPEN",
+			"OR", "QUERY", "RAISE", "REFRESH", "RETURN", "SETOF", "THEN",
+			"VIEW", "WHEN", "WHILE":
 
 			//"SQLERRM", "SQLSTATE", "STACKED", "DIAGNOSTICS",
 
-			cTok.SetUpper()
+			tokens[idx].SetUpper()
+
 		case "NOTICE", "WARNING":
-			if pNcVal == "RAISE" {
-				cTok.SetUpper()
+			if idx > 0 {
+				switch tokens[idx-1].AsUpper() {
+				case "RAISE":
+					tokens[idx].SetUpper()
+				}
 			}
 		}
 
-		if !cTok.IsCodeComment() {
-			pNcVal = ctVal
-		}
-
-		ret = append(ret, cTok)
 	}
 
-	return ret
+	return tokens
 }
 
 func formatPgPLNonBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
@@ -462,14 +459,11 @@ func formatPgPLNonBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		return tokens
 	}
 
-	var ret []FmtToken
-	var pNcVal string
+	idxMax := len(tokens) - 1
 
-	for _, cTok := range tokens {
+	for idx := 0; idx <= idxMax; idx++ {
 
-		ctVal := cTok.AsUpper()
-
-		switch ctVal {
+		switch tokens[idx].AsUpper() {
 		case "AFTER", "AND", "AS", "BEFORE", "CALLED", "CONSTRAINT", "COST",
 			"CREATE", "CURRENT", "DEFAULT", "DEFERRABLE", "DEFERRED",
 			"DEFINER", "DELETE", "DISTINCT", "DO", "EACH", "EXECUTE",
@@ -482,26 +476,20 @@ func formatPgPLNonBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 			"TRANSFORM", "TRIGGER", "TRUNCATE", "TYPE", "UNSAFE", "UPDATE",
 			"VOLATILE", "WHEN", "WINDOW":
 
-			cTok.SetUpper()
-		}
+			tokens[idx].SetUpper()
 
-		// check for language
-		switch pNcVal {
-		case "LANGUAGE":
-			switch ctVal {
-			case "SQL", "C":
-				cTok.SetUpper()
+		case "SQL", "C":
+			// check for language
+			if idx > 0 {
+				switch tokens[idx-1].AsUpper() {
+				case "LANGUAGE":
+					tokens[idx].SetUpper()
+				}
 			}
 		}
-
-		if !cTok.IsCodeComment() {
-			pNcVal = ctVal
-		}
-
-		ret = append(ret, cTok)
 	}
 
-	return ret
+	return tokens
 }
 
 func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
@@ -513,32 +501,31 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		return
 	}
 
-	if len(b.lines) == 0 {
+	if len(b.tokens) == 0 {
 		return
 	}
 
-	line := formatPgPLBodyKeywords(e, b.lines[0])
+	tokens := formatPgPLBodyKeywords(e, b.tokens)
 
-	idxMax := len(line) - 1
+	idxMax := len(tokens) - 1
 
+	isAtomic := false
 	parensDepth := 0
 	var bbStack plStack
 
 	var tFormatted []FmtToken
-	var pTok FmtToken // The previous token
-	var pNcVal string // The upper case value of the previous non-comment token
 	var pKwVal string // The upper case value of the previous keyword token
 
 	declareCnt := 0
 	for idx := 0; idx <= idxMax; idx++ {
-		if line[idx].AsUpper() == "DECLARE" {
+		if tokens[idx].AsUpper() == "DECLARE" {
 			declareCnt++
 		}
 	}
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := line[idx]
+		cTok := tokens[idx]
 		ctVal := cTok.AsUpper()
 
 		////////////////////////////////////////////////////////////////
@@ -548,10 +535,8 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			bbStack.Upsert(ctVal)
 		case "IF", "LOOP", "CASE":
 			// WHILE/FOR vs. LOOP???
-			if pNcVal != "END" {
-				bbStack.Push(ctVal)
-			}
-		case "END":
+			bbStack.Push(ctVal)
+		case "END", "END CASE", "END IF", "END LOOP":
 			_ = bbStack.Pop()
 		}
 
@@ -560,48 +545,29 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		honorVSpace := idx == 0
 		ensureVSpace := false
 
-		// get the next non-comment token...
-		//var nNcTok FmtToken
-		var nNcVal string
-
-		if idx+1 < idxMax {
-			for j := idx + 1; j <= idxMax; j++ {
-				if !line[j].IsCodeComment() {
-					nNcVal = line[j].AsUpper()
-					break
-				}
-			}
+		////
+		var pTok FmtToken
+		var nTok FmtToken
+		if idx > 0 {
+			pTok = tokens[idx-1]
 		}
+		if idx < idxMax {
+			nTok = tokens[idx+1]
+		}
+		ptVal := pTok.AsUpper()
+		ntVal := nTok.AsUpper()
 
 		// Determine if a new-line should be applied before specific tokens
 		switch ctVal {
-		case "BEGIN", "BREAK", "CALL", "CLOSE", "CONTINUE", "DECLARE",
-			"ELSE", "ELSEIF", "ELSIF", "END", "EXCEPTION", "EXIT", "FOR",
-			"OPEN", "RETURN", "WHILE":
+		case "BEGIN", "BREAK", "CALL", "CASE", "CLOSE", "CONTINUE", "DECLARE",
+			"ELSE", "ELSEIF", "ELSIF", "END", "END CASE", "END IF", "END LOOP",
+			"EXCEPTION", "EXIT", "FOR", "IF", "LOOP", "OPEN", "RETURN",
+			"WHILE":
 
 			ensureVSpace = true
 
 		case "EXECUTE":
-			if pNcVal != "IN" {
-				ensureVSpace = true
-			}
-
-		case "IF", "CASE":
-			if pNcVal != "END" {
-				ensureVSpace = true
-			}
-
-			// save these for line wrapping
-		//case "AND":
-		//	if pNcVal != "BETWEEN" {
-		//		ensureVSpace = true
-		//	}
-		//
-		//case "OR":
-		//	ensureVSpace = true
-
-		case "LOOP":
-			if pNcVal != "END" {
+			if ptVal != "IN" {
 				ensureVSpace = true
 			}
 
@@ -612,25 +578,33 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			if bbStack.LastBlock() == "EXCEPTION" {
 				ensureVSpace = true
 			}
+
+		case ")":
+			switch {
+			//case pTok.IsLabel(), pTok.HasTrailingComments():
+			case pTok.IsLabel():
+				ensureVSpace = true
+			case pTok.IsBag():
+				if ntVal != "LOOP" {
+					honorVSpace = true
+				}
+			}
 		}
 
 		// Determine if a new-line should be applied after specific tokens.
 		switch {
-		case pTok.IsLabel(), pTok.IsCodeComment():
-			// Not yet. Checked here so it doesn't need checking for each pNcVal case
-		case cTok.IsLabel(), cTok.IsCodeComment():
-			// Not yet. Checked here so it doesn't need checking for each pNcVal case
+		case pTok.IsLabel(), pTok.HasTrailingComments():
+			// Not yet. Checked here so it doesn't need checking for each ntVal case
+		case cTok.IsLabel(), cTok.HasLeadingComments():
+			// Not yet. Checked here so it doesn't need checking for each ntVal case
 		default:
 
-			switch pNcVal {
+			switch ptVal {
 			case ";", "ELSE":
 				ensureVSpace = true
 
 			case "LOOP":
-				switch ctVal {
-				case ";":
-					// nada
-				default:
+				if ctVal != ";" {
 					ensureVSpace = true
 				}
 
@@ -647,7 +621,10 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 				}
 
 			case "BEGIN":
-				if ctVal != "ATOMIC" {
+				switch ctVal {
+				case "ATOMIC":
+					isAtomic = true
+				default:
 					ensureVSpace = true
 				}
 
@@ -671,20 +648,54 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		// For code comments, labels, and other (DML) bags, defer to the
 		// original white-space.
 		switch {
-		case cTok.IsCodeComment(), cTok.IsLabel(), cTok.IsBag():
+		//case cTok.HasLeadingComments(), cTok.IsLabel(), cTok.IsBag():
+		//	honorVSpace = true
+		//case pTok.HasTrailingComments(), pTok.IsLabel():
+		//	honorVSpace = true
+
+		case cTok.IsLabel(), cTok.IsBag():
 			honorVSpace = true
-		case pTok.IsCodeComment(), pTok.IsLabel():
+		case pTok.IsLabel():
 			honorVSpace = true
 		case pTok.IsBag():
 
 			switch ctVal {
 			case ")":
-				if nNcVal != "LOOP" {
+				if ntVal != "LOOP" {
 					honorVSpace = true
 				}
 			default:
 				honorVSpace = true
 			}
+		}
+
+		switch {
+		case pTok.IsBag():
+			bk := bagKey(pTok.typeOf, pTok.id)
+			b, ok := bagMap[bk]
+			if ok {
+				switch {
+				case b.HasTrailingComments():
+					ensureVSpace = true
+				default:
+					switch ctVal {
+					case ")":
+						if ntVal != "LOOP" {
+							honorVSpace = true
+						}
+					default:
+						honorVSpace = true
+					}
+				}
+			}
+			//		case pTok.HasTrailingComments()
+			//			ensureVSpace = true
+		case pTok.IsLabel():
+			ensureVSpace = true
+			//		case cTok.HasLeadingComments():
+			//			ensureVSpace = true
+		case cTok.IsLabel(), cTok.IsBag():
+			honorVSpace = true
 		}
 
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
@@ -701,13 +712,9 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 				indents -= 2
 			case "IF", "LOOP":
 				// WHILE/FOR vs. LOOP???
-				if pNcVal != "END" {
-					indents--
-				}
+				indents--
 			case "CASE":
-				if pNcVal != "END" {
-					indents -= 2
-				}
+				indents -= 2
 			case "WHEN":
 				if bbStack.Last() == "CASE" {
 					indents--
@@ -720,9 +727,18 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			}
 
 			if bbStack.LastBlock() == "EXCEPTION" {
-				if pKwVal == "DIAGNOSTICS" && pNcVal == "," {
+				if pKwVal == "DIAGNOSTICS" && ptVal == "," {
 					indents++
 				}
+			}
+
+			if isAtomic && indents > 0 {
+				// Even though ATOMIC SQL functions have a BEGIN and END,
+				// ISTM that the indentation should match the non-atomic
+				// SQL functions... if only so that a function can be flipped
+				// between the two without changing the indentation of the
+				// whole thing.
+				indents--
 			}
 		}
 
@@ -737,7 +753,7 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		////////////////////////////////////////////////////////////////
 		switch {
 		case cTok.IsBag():
-			if pNcVal == "IN" {
+			if ptVal == "IN" {
 				indents++
 			}
 			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
@@ -754,11 +770,7 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			parensDepth--
 		}
 
-		// Set the various "previous token" values
-		pTok = cTok
-		if !cTok.IsCodeComment() {
-			pNcVal = ctVal
-		}
+		// Set the previous keyword value
 		if cTok.IsKeyword() {
 			pKwVal = ctVal
 		}
@@ -766,27 +778,10 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	var newLines [][]FmtToken
-	newLines = append(newLines, tFormatted)
-	/*
-		var newLine []FmtToken
-
-		for _, cTok := range tFormatted {
-			if cTok.vSpace > 0 {
-				if len(newLine) > 0 {
-					newLines = append(newLines, newLine)
-					newLine = nil
-				}
-			}
-			newLine = append(newLine, cTok)
-		}
-		if len(newLine) > 0 {
-			newLines = append(newLines, newLine)
-		}
-	*/
+	wt := wrapLines(e, PLxBody, tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)
 }
 
 func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
@@ -802,20 +797,15 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 	// DEFINER functions/procedures that do not set a search path or that have
 	// an insecure search path
 
-	if len(b.lines) == 0 {
+	if len(b.tokens) == 0 {
 		return
 	}
 
-	line := formatPgPLNonBodyKeywords(e, b.lines[0])
-
-	idxMax := len(line) - 1
-
-	parensDepth := 0
+	tokens := formatPgPLNonBodyKeywords(e, b.tokens)
+	idxMax := len(tokens) - 1
 	objType := ""
 
 	var tFormatted []FmtToken
-	var pTok FmtToken // The previous token
-	var pNcVal string // The upper case value of the previous non-comment token
 
 	// procedure/function labels
 	var psLabels = []string{"TYPE", "NAME", "SIGNATURE", "RETURNS", "LANGUAGE",
@@ -832,77 +822,29 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := line[idx]
-		ctVal := cTok.AsUpper()
+		cTok := tokens[idx]
 
-		switch ctVal {
+		switch cTok.AsUpper() {
 		case "FUNCTION", "PROCEDURE", "TRIGGER", "DO":
 			if objType == "" {
-				objType = ctVal
+				objType = cTok.AsUpper()
 			}
 		}
 
 		////////////////////////////////////////////////////////////////
 		// Re-order the parameters of the function/procedure declaration to
 		// match that found in the PostgreSQL documentation.
-
-		// Determine the lines
-		if cTok.IsCodeComment() {
-
-			// If there is a comment then it is probably for the param
-			// associated with the next non-comment token, so determine what
-			// the label for the next non-comment token would be so the comment
-			// can remain with the following param.
-
-			// get the next non-comment token...
-			nNcIdx := 0
-			var nNcTok FmtToken
-
-			if idx+1 < idxMax {
-				for j := idx + 1; j <= idxMax; j++ {
-					if !line[j].IsCodeComment() {
-						nNcTok = line[j]
-						nNcIdx = j
-						break
-					}
-				}
-			}
-
-			// ...and the next non-comment value after that
-			nNcVal := ""
-			if nNcIdx < idxMax {
-				for j := nNcIdx + 1; j <= idxMax; j++ {
-					if !line[j].IsCodeComment() {
-						nNcVal = line[j].AsUpper()
-						break
-					}
-				}
-			}
-
-			paramLabel = pgParamLabel(objType, paramLabel, pNcVal, nNcVal, nNcTok)
-		} else {
-
-			// get the next non-comment value
-			nNcVal := ""
-			if idx < idxMax {
-				for j := idx + 1; j <= idxMax; j++ {
-					if !line[j].IsCodeComment() {
-						nNcVal = line[j].AsUpper()
-						break
-					}
-				}
-			}
-
-			paramLabel = pgParamLabel(objType, paramLabel, pNcVal, nNcVal, cTok)
+		var pTok FmtToken
+		var nTok FmtToken
+		if idx > 0 {
+			pTok = tokens[idx-1]
+		}
+		if idx < idxMax {
+			nTok = tokens[idx+1]
 		}
 
+		paramLabel = pgParamLabel(objType, paramLabel, pTok, cTok, nTok)
 		params[paramLabel] = append(params[paramLabel], cTok)
-
-		// Set the various "previous token" values
-		pTok = cTok
-		if !cTok.IsCodeComment() {
-			pNcVal = ctVal
-		}
 	}
 
 	var sLabels []string
@@ -914,115 +856,116 @@ func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, b
 	}
 
 	// TODO: If there is a signature then format that
+	if true {
+		parensDepth := 0
+		var pTok FmtToken
 
-	for _, sn := range sLabels {
-		if toks, ok := params[sn]; ok {
-			parensDepth = 0
+		for _, sn := range sLabels {
+			if toks, ok := params[sn]; ok {
 
-			for idx, cTok := range toks {
+				for idx, cTok := range toks {
 
-				ctVal := cTok.AsUpper()
+					honorVSpace := idx == 0
+					ensureVSpace := false
 
-				honorVSpace := idx == 0
-				ensureVSpace := false
+					ctVal := cTok.AsUpper()
 
-				switch sn {
-				case "TYPE", "NAME", "SIGNATURE", "SET", "AS", "FINAL":
-					//nada
-				case "BODY":
-					ensureVSpace = cTok.IsPLBag() || pTok.IsPLBag()
-				default:
-					ensureVSpace = idx == 0
-				}
+					switch ctVal {
+					case "(":
+						parensDepth++
+					case ")":
+						parensDepth--
+					}
 
-				switch ctVal {
-				case "(":
-					parensDepth++
-				case ")":
-					parensDepth--
-				}
+					switch sn {
+					case "SIGNATURE", "RETURNS":
+						if parensDepth == 1 {
+							switch pTok.value {
+							case "(", ",":
+								ensureVSpace = true
+							}
+						}
+					}
 
-				switch sn {
-				case "SIGNATURE", "RETURNS":
-					if parensDepth == 1 {
-						switch pNcVal {
-						case "(", ",":
+					switch sn {
+					case "TYPE", "NAME", "SIGNATURE", "FINAL":
+						//nada
+					case "SET", "AS":
+						if ctVal == sn {
+							ensureVSpace = true
+						}
+					case "BODY":
+						if cTok.IsPLBag() || pTok.IsPLBag() {
+							ensureVSpace = true
+						}
+					default:
+						if idx == 0 {
 							ensureVSpace = true
 						}
 					}
-				case "SET", "AS":
-					if ctVal == sn {
-						ensureVSpace = true
-					}
-				}
 
-				switch {
-				case cTok.IsCodeComment(), pTok.IsCodeComment():
-					honorVSpace = true
-				}
-
-				cTok.AdjustVSpace(ensureVSpace, honorVSpace)
-
-				if cTok.vSpace > 0 {
-
-					indents := baseIndents + parensDepth
-
-					if objType == "TRIGGER" {
-						indents++
+					switch {
+					case cTok.HasLeadingComments(), pTok.HasTrailingComments():
+						honorVSpace = true
 					}
 
-					cTok.AdjustIndents(indents)
-				} else {
-					cTok.AdjustHSpace(e, pTok)
-				}
+					cTok.AdjustVSpace(ensureVSpace, honorVSpace)
 
-				if cTok.IsBag() {
-					formatBag(e, bagMap, cTok.typeOf, cTok.id, cTok.indents, ensureVSpace)
-				}
+					if cTok.vSpace > 0 {
+						if objType == "TRIGGER" {
+							cTok.AdjustIndents(baseIndents + parensDepth + 1)
+						} else {
+							cTok.AdjustIndents(baseIndents + parensDepth)
+						}
+					} else {
+						cTok.AdjustHSpace(e, pTok)
+					}
 
-				// Set the various "previous token" values
-				pTok = cTok
-				if !cTok.IsCodeComment() {
-					pNcVal = ctVal
-				}
+					if cTok.IsBag() {
+						formatBag(e, bagMap, cTok.typeOf, cTok.id, cTok.indents, ensureVSpace)
+					}
 
-				tFormatted = append(tFormatted, cTok)
+					// Set the previous token
+					pTok = cTok
+
+					tFormatted = append(tFormatted, cTok)
+				}
 			}
 		}
 	}
 
 	// Cleanup extraneous vertical spacing
-	pTok = FmtToken{}
-	for idx, cTok := range tFormatted {
+	if true {
+		var pTok FmtToken
+		for idx, cTok := range tFormatted {
 
-		if isPgBodyBoundary(cTok.value) {
-			if pTok.AsUpper() == "AS" {
-				tFormatted[idx].vSpace = 0
-				tFormatted[idx].hSpace = " "
+			if isPgBodyBoundary(cTok.value) {
+				if pTok.AsUpper() == "AS" {
+					tFormatted[idx].vSpace = 0
+					tFormatted[idx].hSpace = " "
+				}
+			} else if cTok.vSpace > 1 {
+				tFormatted[idx].vSpace = 1
 			}
-		} else if cTok.vSpace > 1 {
-			tFormatted[idx].vSpace = 1
-		}
 
-		// TODO: The following is a hack. Can't see why but sorting the
-		// non-body when there are parameters (in the input) after the
-		// body can cause vertical space to be added prior to the closing
-		// semi-colon. This removes extra vertical space but it would be
-		// better to understand why this is happening.
-		if cTok.value == ";" {
-			if !pTok.IsCodeComment() {
-				tFormatted[idx].vSpace = 0
-				tFormatted[idx].hSpace = " "
+			// TODO: The following is a hack. Can't see why but sorting the
+			// non-body when there are parameters (in the input) after the
+			// body can cause vertical space to be added prior to the closing
+			// semi-colon. This removes extra vertical space but it would be
+			// better to understand why this is happening.
+			if cTok.value == ";" {
+				if !pTok.HasTrailingComments() {
+					tFormatted[idx].vSpace = 0
+					tFormatted[idx].hSpace = " "
+				}
 			}
+			// Set the previous token
+			pTok = cTok
 		}
-		pTok = cTok
 	}
 
-	var newLines [][]FmtToken
-	newLines = append(newLines, tFormatted)
-
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
 }
 
 /*

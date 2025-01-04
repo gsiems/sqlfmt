@@ -75,14 +75,16 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 				// Add a token that has the pointer to the new bag
 				remainder = append(remainder, FmtToken{
-					id:         bagId,
-					categoryOf: PLxBag,
-					typeOf:     PLxBag,
-					vSpace:     cTok.vSpace,
-					indents:    cTok.indents,
-					hSpace:     cTok.hSpace,
-					vSpaceOrig: cTok.vSpaceOrig,
-					hSpaceOrig: cTok.hSpaceOrig,
+					id:          bagId,
+					categoryOf:  PLxBag,
+					typeOf:      PLxBag,
+					vSpace:      cTok.vSpace,
+					indents:     cTok.indents,
+					hSpace:      cTok.hSpace,
+					vSpaceOrig:  cTok.vSpaceOrig,
+					hSpaceOrig:  cTok.hSpaceOrig,
+					ledComments: cTok.ledComments,
+					trlComments: cTok.trlComments,
 				})
 
 			default:
@@ -101,12 +103,10 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	// for now, just to figure out grabbing all the PL
 	for id, bt := range tokMap {
 		key := bagKey(PLxBag, id)
-		var lines [][]FmtToken
-		lines = append(lines, bt)
 		bagMap[key] = TokenBag{
 			id:     id,
 			typeOf: PLxBag,
-			lines:  lines,
+			tokens: bt,
 		}
 	}
 

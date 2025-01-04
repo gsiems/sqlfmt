@@ -113,13 +113,11 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			isInBag = false
 
 			key := bagKey(DDLBag, bagId)
-			var lines [][]FmtToken
-			lines = append(lines, bagTokens)
 
 			bagMap[key] = TokenBag{
 				id:     bagId,
 				typeOf: DDLBag,
-				lines:  lines,
+				tokens: bagTokens,
 			}
 
 			bagId = 0
@@ -167,14 +165,12 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	// incorrect statement submitted?), ensure that no tokens are lost.
 	if len(bagTokens) > 0 {
 		key := bagKey(DDLBag, bagId)
-		var lines [][]FmtToken
-		lines = append(lines, bagTokens)
 
 		bagMap[key] = TokenBag{
 			id:     bagId,
 			typeOf: DDLBag,
 			//forObj: forObj,
-			lines: lines,
+			tokens: bagTokens,
 		}
 	}
 
@@ -334,25 +330,25 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
-	if len(b.lines) == 0 {
+	if len(b.tokens) == 0 {
 		return
 	}
 
-	line := formatDDLKeywords(e, b.lines[0])
+	tokens := formatDDLKeywords(e, b.tokens)
 
-	idxMax := len(line) - 1
+	idxMax := len(tokens) - 1
 
 	parensDepth := 0
 
 	ddlAction := ""
-	objType := ddlObjType(e, line)
+	objType := ddlObjType(e, tokens)
 
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := line[idx]
+		cTok := tokens[idx]
 		ctVal := cTok.AsUpper()
 
 		if ddlAction == "" {
@@ -374,18 +370,18 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 			switch objType {
 			case "VIEW", "MATERIALIZED VIEW":
-			ensureVSpace = true
-			//default:
-			//	if ! cTok.IsCodeComment() {
-			//		honorVSpace = false
-			//	}
+				ensureVSpace = true
+				//default:
+				//	if ! cTok.IsCodeComment() {
+				//		honorVSpace = false
+				//	}
 			}
 
-			case "(":
+		case "(":
 			if parensDepth == 0 {
 				honorVSpace = false
 			}
-			case ")":
+		case ")":
 			if parensDepth < 2 {
 				honorVSpace = false
 			}
@@ -396,7 +392,12 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			honorVSpace = true
 		case pTok.IsCodeComment(), pTok.IsBag():
 			honorVSpace = true
-}
+		}
+
+		switch ctVal {
+		case "CREATE", "ALTER", "DROP", "IMPORT":
+			honorVSpace = true
+		}
 
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
 
@@ -454,25 +455,8 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	var newLines [][]FmtToken
-	newLines = append(newLines, tFormatted)
-	/*
-		var newLine []FmtToken
-
-		for _, cTok := range tFormatted {
-			if cTok.vSpace > 0 {
-				if len(newLine) > 0 {
-					newLines = append(newLines, newLine)
-					newLine = nil
-				}
-			}
-			newLine = append(newLine, cTok)
-		}
-		if len(newLine) > 0 {
-			newLines = append(newLines, newLine)
-		}
-	*/
+	//wt := validateWhitespacing(e, DDLBag, tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, newLines)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, tFormatted)
 }

@@ -53,14 +53,12 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 
 		parensDepth := 0
 
-		for _, line := range bag.lines {
-			for _, t := range line {
-				switch t.value {
-				case "(":
-					parensDepth++
-				case ")":
-					parensDepth--
-				}
+		for _, t := range bag.tokens {
+			switch t.value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
 			}
 		}
 
@@ -103,7 +101,8 @@ func FormatInput(e *env.Env, input string) (string, error) {
 	bagMap, mainTokens := tagBags(e, cleaned)
 	fmtTokens := formatBags(e, mainTokens, bagMap)
 	untagged := untagBags(fmtTokens, bagMap)
-	fmtStatement := combineTokens(e, untagged)
+	unstashed := unstashComments(e, untagged)
+	fmtStatement := combineTokens(e, unstashed)
 
 	return fmtStatement, nil
 }
@@ -144,13 +143,24 @@ func stashComments(e *env.Env, tokens []parser.Token) []FmtToken {
 				value:  cTok.Value(),
 				vSpace: vSpace,
 				hSpace: hSpace,
+				//vSpaceOrig: cTok.VSpace()
+				//hSpaceOrig  cTok.HSpace()
 			}
 
 			// If the comment has no vertical space and is not the first token
 			// then it is cached as a trailing comment to the preceding non-comment
-			// token... otherwise cache it as a leading comment to the next
-			// non-comment token
+			// token.
+			// If the comment has one vertical space and is tight to the preceding
+			// non-comment then it is also cached as a trailing comment to the
+			// preceding non-comment token.
+			// If the comment, or any immediate preceding comments, have more than
+			// one vertical space then it is cached and added as a leading comment
+			// to the next non-comment token
+
 			switch {
+			case len(lCmts) > 0:
+				lCmts = append(lCmts, nt)
+			//case cTok.VSpace() > 1:
 			case cTok.VSpace() > 0:
 				lCmts = append(lCmts, nt)
 			case len(ret) == 0:
@@ -158,6 +168,21 @@ func stashComments(e *env.Env, tokens []parser.Token) []FmtToken {
 			default:
 				ret[len(ret)-1].AddTrailingComment(nt)
 			}
+			/*
+				switch {
+				case len(ret) == 0:
+					lCmts = append(lCmts, nt)
+				case len(lCmts) > 0:
+					lCmts = append(lCmts, nt)
+				default:
+					switch cTok.VSpace() {
+					case 0, 1:
+						ret[len(ret)-1].AddTrailingComment(nt)
+					default:
+						lCmts = append(lCmts, nt)
+					}
+				}
+			*/
 		default:
 			nt := FmtToken{
 				categoryOf: cTok.Category(),
@@ -238,6 +263,11 @@ func consolidateMWTokens(e *env.Env, tokens []FmtToken) []FmtToken {
 			case "MERGE":
 				switch tokens[idx+1].AsUpper() {
 				case "INTO":
+					combineNext = true
+				}
+			case "DEFAULT":
+				switch tokens[idx+1].AsUpper() {
+				case "VALUES":
 					combineNext = true
 				}
 			}
@@ -571,15 +601,82 @@ func untagBags(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 			tb, ok := bagMap[key]
 			if ok {
-				for _, line := range tb.lines {
-					ret = append(ret, untagBags(line, bagMap)...)
-				}
-			} else {
-				ret = append(ret, unpackTokens(cTok)...)
+				ret = append(ret, untagBags(tb.tokens, bagMap)...)
 			}
 		default:
-			ret = append(ret, unpackTokens(cTok)...)
+			ret = append(ret, cTok)
 		}
+	}
+	return ret
+}
+
+func unstashComments(e *env.Env, tokens []FmtToken) []FmtToken {
+
+	var ret []FmtToken
+
+	lIndents := 0
+	tIndents := 0
+	lpd := 0
+
+	for _, cTok := range tokens {
+
+		if cTok.vSpace > 0 {
+			lIndents = cTok.indents
+			lpd = 0
+
+			// TODO: the desired indentation of the trailing comments isn't
+			// always the same as for the leading comments. Having lost the
+			// bagType information at this point we need another way of
+			// determining the trailing indentation.
+
+			tIndents = lIndents
+		}
+
+		switch cTok.value {
+		case "(":
+			lpd++
+		case ")":
+			lpd--
+		}
+
+		if len(cTok.ledComments) > 0 {
+			for _, ct := range cTok.ledComments {
+				nt := FmtToken{
+					categoryOf: parser.Comment,
+					typeOf:     ct.typeOf,
+					value:      ct.value,
+					vSpace:     ct.vSpace,
+					hSpace:     ct.hSpace,
+					indents:    ct.indents,
+				}
+				if nt.vSpace > 0 {
+					nt.indents = lIndents + lpd
+				}
+				ret = append(ret, nt)
+			}
+			cTok.ledComments = nil
+		}
+
+		ret = append(ret, cTok)
+
+		if len(cTok.trlComments) > 0 {
+			for _, ct := range cTok.trlComments {
+				nt := FmtToken{
+					categoryOf: parser.Comment,
+					typeOf:     ct.typeOf,
+					value:      ct.value,
+					vSpace:     ct.vSpace,
+					hSpace:     ct.hSpace,
+					indents:    ct.indents,
+				}
+				if nt.vSpace > 0 {
+					nt.indents = tIndents + lpd
+				}
+				ret = append(ret, nt)
+			}
+			cTok.trlComments = nil
+		}
+
 	}
 	return ret
 }

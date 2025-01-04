@@ -22,15 +22,11 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 		return
 	}
 
-	if len(b.lines) == 0 {
+	if len(b.tokens) == 0 {
 		return
 	}
 
-	var newLines [][]FmtToken
-
-	line := b.lines[0]
-
-	idxMax := len(line) - 1
+	idxMax := len(b.tokens) - 1
 	parensDepth := 0
 
 	var tFormatted []FmtToken
@@ -38,7 +34,7 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 
 	for idx := 0; idx <= idxMax; idx++ {
 
-		cTok := line[idx]
+		cTok := b.tokens[idx]
 		ctVal := cTok.AsUpper()
 
 		////////////////////////////////////////////////////////////////
@@ -103,12 +99,8 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	if len(tFormatted) > 0 {
-		newLines = append(newLines, tFormatted)
-	}
-
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, newLines)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, tFormatted)
 }
 
 func formatCodeComment(e *env.Env, cTok FmtToken, baseIndents int) FmtToken {

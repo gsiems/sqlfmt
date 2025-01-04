@@ -3,6 +3,7 @@ package formatter
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"sort"
@@ -41,6 +42,7 @@ func TestSQLFiles(t *testing.T) {
 		inputDir := path.Join(dataDir, d)
 		cleanedDir := path.Join(baseDir, "cleaned")
 		taggedDir := path.Join(baseDir, "tagged")
+		untaggedDir := path.Join(baseDir, "untagged")
 		formattedDir := path.Join(baseDir, "formatted")
 		outputDir := path.Join(baseDir, "output")
 
@@ -53,6 +55,19 @@ func TestSQLFiles(t *testing.T) {
 			// Ensure that it is a *.sql file
 			if !strings.HasSuffix(file.Name(), ".sql") {
 				continue
+			}
+
+			if false {
+				switch file.Name() {
+				case "foo.sql":
+				//case "pg_wrapping.sql":
+				default:
+					continue
+				}
+			}
+
+			if false {
+				log.Printf("\n\n%q\n", file.Name())
 			}
 
 			inputFile := path.Join(inputDir, file.Name())
@@ -72,6 +87,8 @@ func TestSQLFiles(t *testing.T) {
 			if strings.HasPrefix(l1, "sqlfmt") {
 				e.SetDirectives(l1)
 			}
+
+			e.SetDialect(d)
 
 			if !e.FormatCode() {
 				continue
@@ -142,8 +159,26 @@ func TestSQLFiles(t *testing.T) {
 			}
 
 			////////////////////////////////////////////////////////////////////////
+			// Untag the tokens and compare to expected
+			untagged := untagBags(fmtTokens, bagMap)
+			unstashed := unstashComments(e, untagged)
+
+			err = writeTagged(untaggedDir, d, file.Name(), unstashed, bagMap, e, "Untagged")
+			if err != nil {
+				t.Errorf("Error writing formatted for %s: %s", file.Name(), err)
+				continue
+			}
+
+			if verbose {
+				err = compareFiles(untaggedDir, d, file.Name())
+				if err != nil {
+					t.Errorf("Error comparing formatted for %s: %s", file.Name(), err)
+				}
+			}
+
+			////////////////////////////////////////////////////////////////////////
 			// Recombine the tokens and write the final output
-			fmtStatement := combineTokens(e, fmtTokens, bagMap)
+			fmtStatement := combineTokens(e, unstashed)
 
 			err = writeOutput(outputDir, d, file.Name(), fmtStatement)
 			if err != nil {
@@ -285,11 +320,12 @@ func writeTagged(dir, d, fName string, m []FmtToken, bagMap map[string]TokenBag,
 
 		bagId := bagMap[key].id
 		bagType := nameOf(bagMap[key].typeOf)
-		for _, line := range bagMap[key].lines {
-			for _, t := range line {
-				ts := t.String()
-				toks = append(toks, fmt.Sprintf("%6d %-12s: %s", bagId, bagType, ts))
-			}
+		for _, t := range bagMap[key].tokens {
+			ts := t.String()
+			lct := len(t.ledComments)
+			tct := len(t.trlComments)
+
+			toks = append(toks, fmt.Sprintf("%6d %-12s (%d, %d): %s", bagId, bagType, lct, tct, ts))
 		}
 	}
 

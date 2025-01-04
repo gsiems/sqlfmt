@@ -62,13 +62,13 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		return
 	}
 
-	if len(b.lines) == 0 {
+	if len(b.tokens) == 0 {
 		return
 	}
 
-	line := formatDCLKeywords(e, b.lines[0])
+	tokens := formatDCLKeywords(e, b.tokens)
 
-	idxMax := len(line) - 1
+	idxMax := len(tokens) - 1
 	parensDepth := 0
 
 	var tFormatted []FmtToken
@@ -81,7 +81,7 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	for idx := 0; idx <= idxMax; idx++ {
 
 		// current token
-		cTok := line[idx]
+		cTok := tokens[idx]
 		ctVal := cTok.AsUpper()
 
 		////////////////////////////////////////////////////////////////
@@ -141,25 +141,8 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	var newLines [][]FmtToken
-	newLines = append(newLines, tFormatted)
-	/*
-		var newLine []FmtToken
-
-		for _, cTok := range tFormatted {
-			if cTok.vSpace > 0 {
-				if len(newLine) > 0 {
-					newLines = append(newLines, newLine)
-					newLine = nil
-				}
-			}
-			newLine = append(newLine, cTok)
-		}
-		if len(newLine) > 0 {
-			newLines = append(newLines, newLine)
-		}
-	*/
+	wt := wrapOnCommas(e, DCLBag, 1, tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", newLines)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)
 }

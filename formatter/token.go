@@ -17,6 +17,8 @@ type CmtToken struct {
 	indents    int    // the count of indentations preceding the token
 	hSpace     string // the non-indentation horizontal white-space preceding the token
 	value      string // the non-white-space text of the token
+	vSpaceOrig int    // the original preceding vertical white-space value as parsed
+	hSpaceOrig string // the original preceding horizontal white-space value as parsed
 }
 
 func (t *CmtToken) AdjustIndents(i int) {
@@ -37,12 +39,13 @@ type FmtToken struct {
 	id          int        // the ID of the token
 	categoryOf  int        // the category of token
 	typeOf      int        // the type of token
-	vSpace      int        // the count of line-feeds (vertical space) preceding the token
 	indents     int        // the count of indentations preceding the token
-	hSpace      string     // the non-indentation horizontal white-space preceding the token
-	value       string     // the non-white-space text of the token
+	vSpace      int        // the count of line-feeds (vertical space) preceding the token
 	vSpaceOrig  int        // the original preceding vertical white-space value as parsed
+	fbp         bool       // "formatting break point" for use in determining line wrapping
+	hSpace      string     // the non-indentation horizontal white-space preceding the token
 	hSpaceOrig  string     // the original preceding horizontal white-space value as parsed
+	value       string     // the non-white-space text of the token
 	trlComments []CmtToken // Trailing (end of line) comment(s)
 	ledComments []CmtToken // Leading comments
 }
@@ -55,13 +58,6 @@ func (t *FmtToken) AsUpper() string {
 func (t *FmtToken) IsBag() bool {
 	switch t.typeOf {
 	case DNFBag, DCLBag, DDLBag, DMLBag, DMLCaseBag, PLxBag, PLxBody, CommentOnBag:
-		return true
-	}
-	return false
-}
-func (t *FmtToken) IsUnpackedBag() bool {
-	switch t.typeOf {
-	case UnpackedBag:
 		return true
 	}
 	return false
@@ -138,13 +134,6 @@ func (t *FmtToken) AdjustIndents(i int) {
 		} else {
 			t.indents = 0
 		}
-	}
-
-	for idx, _ := range t.trlComments {
-		t.trlComments[idx].AdjustIndents(i)
-	}
-	for idx, _ := range t.ledComments {
-		t.ledComments[idx].AdjustIndents(i)
 	}
 }
 
