@@ -49,130 +49,159 @@ func (d PostgreSQLDialect) MaxOperatorLength() int {
 func (d PostgreSQLDialect) IsDatatype(s ...string) bool {
 
 	var pgDatatypes = map[string]bool{
-		"bigint":                          true,
-		"bigserial":                       true,
-		"bit":                             true, // [(n)]
-		"bit (n)":                         true, // [(n)]
-		"bit varying":                     true, // [(n)]
-		"bit varying (n)":                 true, // [(n)]
-		"boolean":                         true,
-		"bool":                            true, // alternate/abbreviated form
-		"box":                             true,
-		"bytea":                           true,
-		"\"char\"":                        true, // datatype seen in pg_catalog
-		"\"char\" (n)":                    true, // datatype seen in pg_catalog
-		"char":                            true, // [(n)] alternate/abbreviated form
-		"char (n)":                        true, // [(n)] alternate/abbreviated form
-		"character":                       true, // [(n)]
-		"character (n)":                   true, // [(n)]
-		"character varying":               true, // [(n)]
-		"character varying (n)":           true, // [(n)]
-		"cidr":                            true,
-		"circle":                          true,
-		"datemultirange":                  true,
-		"daterange":                       true,
-		"date":                            true,
-		"decimal":                         true, // [p[,s])
-		"decimal (n)":                     true, // [p[,s])
-		"decimal (n,n)":                   true, // [p[,s])
-		"double precision":                true,
-		"float":                           true, // [(p)] alternate/abbreviated form
-		"float4":                          true, // alternate/abbreviated form
-		"float8":                          true, // alternate/abbreviated form
-		"inet":                            true,
-		"integer":                         true,
-		"int":                             true, // alternate/abbreviated form
-		"int2":                            true, // alternate/abbreviated form
-		"int4multirange":                  true,
-		"int4range":                       true,
-		"int4":                            true, // alternate/abbreviated form
-		"int8multirange":                  true,
-		"int8range":                       true,
-		"int8":                            true, // alternate/abbreviated form
-		"interval":                        true, // [(p)]
-		"interval (n)":                    true, // [(p)]
-		"interval day to hour":            true, // expanded fields
-		"interval day to minute":          true, // expanded fields
-		"interval day to second":          true, // expanded fields
-		"interval day":                    true, // expanded fields
-		"interval hour to minute":         true, // expanded fields
-		"interval hour to second":         true, // expanded fields
-		"interval hour":                   true, // expanded fields
-		"interval minute to second":       true, // expanded fields
-		"interval minute":                 true, // expanded fields
-		"interval month":                  true, // expanded fields
-		"interval second":                 true, // expanded fields
-		"interval year to month":          true, // expanded fields
-		"interval year":                   true, // expanded fields
-		"jsonb":                           true,
-		"json":                            true,
-		"line":                            true,
-		"lseg":                            true,
-		"macaddr8":                        true,
-		"macaddr":                         true,
-		"money":                           true,
-		"name":                            true, // datatype seen in pg_catalog
-		"numeric":                         true, // [p[,s])
-		"numeric (n)":                     true, // [p[,s])
-		"numeric (n,n)":                   true, // [p[,s])
-		"nummultirange":                   true,
-		"numrange":                        true,
-		"path":                            true,
-		"pg_lsn":                          true,
-		"pg_snapshot":                     true,
-		"point":                           true,
-		"polygon":                         true,
-		"real":                            true,
-		"serial":                          true,
-		"smallint":                        true,
-		"smallserial":                     true,
-		"text":                            true,
-		"timestamp":                       true,
-		"timestamp (n)":                   true,
-		"timestamp without time zone":     true,
-		"timestamp (n) without time zone": true,
-		"timestamp with time zone":        true,
-		"timestamp (n) with time zone":    true,
-		"timestamptz":                     true, // alternate/abbreviated form
-		"timetz":                          true, // alternate/abbreviated form
-		"time":                            true,
-		"time (n)":                        true,
-		"time without time zone":          true, // [(p)]
-		"time (n) without time zone":      true, // [(p)]
-		"time with time zone":             true, // [(p)]
-		"time (n) with time zone":         true, // [(p)]
-		"tsmultirange":                    true,
-		"tsquery":                         true,
-		"tsrange":                         true,
-		"tstzmultirange":                  true,
-		"tstzrange":                       true,
-		"tsvector":                        true,
-		"txid_snapshot":                   true,
-		"uuid":                            true,
-		"varchar":                         true, // [(n)]
-		"varchar (n)":                     true, // [(n)]
-		"xml":                             true,
-		"oid":                             true, // object identifier types
-		"regclass":                        true, // object identifier types
-		"regcollation":                    true, // object identifier types
-		"regconfig":                       true, // object identifier types
-		"regdictionary":                   true, // object identifier types
-		"regnamespace":                    true, // object identifier types
-		"regoper":                         true, // object identifier types
-		"regoperator":                     true, // object identifier types
-		"regproc":                         true, // object identifier types
-		"regprocedure":                    true, // object identifier types
-		"regrole":                         true, // object identifier types
-		"regtype":                         true, // object identifier types
-		"box2d":                           true, // PostGIS extension
-		"box3d":                           true, // PostGIS extension
-		"geometry":                        true, // PostGIS extension
-		"geometry_dump":                   true, // PostGIS extension
-		"geography":                       true, // PostGIS extension
+		"bigint":                           true,
+		"bigserial":                        true,
+		"bit":                              true, // [(n)]
+		"bit (n)":                          true, // [(n)]
+		"bit varying":                      true, // [(n)]
+		"bit varying (n)":                  true, // [(n)]
+		"boolean":                          true,
+		"bool":                             true, // alternate/abbreviated form
+		"box":                              true,
+		"bytea":                            true,
+		"\"char\"":                         true, // datatype seen in pg_catalog
+		"\"char\" (n)":                     true, // datatype seen in pg_catalog
+		"char":                             true, // [(n)] alternate/abbreviated form
+		"char (n)":                         true, // [(n)] alternate/abbreviated form
+		"character":                        true, // [(n)]
+		"character (n)":                    true, // [(n)]
+		"character varying":                true, // [(n)]
+		"character varying (n)":            true, // [(n)]
+		"cidr":                             true,
+		"circle":                           true,
+		"datemultirange":                   true,
+		"daterange":                        true,
+		"date":                             true,
+		"decimal":                          true, // [p[,s])
+		"decimal (n)":                      true, // [p[,s])
+		"decimal (n,n)":                    true, // [p[,s])
+		"double precision":                 true,
+		"float":                            true, // [(p)] alternate/abbreviated form
+		"float4":                           true, // alternate/abbreviated form
+		"float8":                           true, // alternate/abbreviated form
+		"inet":                             true,
+		"integer":                          true,
+		"int":                              true, // alternate/abbreviated form
+		"int2":                             true, // alternate/abbreviated form
+		"int4multirange":                   true,
+		"int4range":                        true,
+		"int4":                             true, // alternate/abbreviated form
+		"int8multirange":                   true,
+		"int8range":                        true,
+		"int8":                             true, // alternate/abbreviated form
+		"interval":                         true, // [(p)]
+		"interval (n)":                     true, // [(p)]
+		"interval day to hour":             true, // expanded fields
+		"interval day to minute":           true, // expanded fields
+		"interval day to second":           true, // expanded fields
+		"interval day":                     true, // expanded fields
+		"interval hour to minute":          true, // expanded fields
+		"interval hour to second":          true, // expanded fields
+		"interval hour":                    true, // expanded fields
+		"interval minute to second":        true, // expanded fields
+		"interval minute":                  true, // expanded fields
+		"interval month":                   true, // expanded fields
+		"interval second":                  true, // expanded fields
+		"interval year to month":           true, // expanded fields
+		"interval year":                    true, // expanded fields
+		"jsonb":                            true,
+		"json":                             true,
+		"line":                             true,
+		"lseg":                             true,
+		"macaddr8":                         true,
+		"macaddr":                          true,
+		"money":                            true,
+		"name":                             true, // datatype seen in pg_catalog
+		"numeric":                          true, // [p[,s])
+		"numeric (n)":                      true, // [p[,s])
+		"numeric (n,n)":                    true, // [p[,s])
+		"nummultirange":                    true,
+		"numrange":                         true,
+		"path":                             true,
+		"pg_lsn":                           true,
+		"pg_snapshot":                      true,
+		"point":                            true,
+		"polygon":                          true,
+		"real":                             true,
+		"serial":                           true,
+		"smallint":                         true,
+		"smallserial":                      true,
+		"text":                             true,
+		"timestamp":                        true,
+		"timestamp (n)":                    true,
+		"timestamp without time zone":      true,
+		"timestamp (n) without time zone":  true,
+		"timestamp with time zone":         true,
+		"timestamp (n) with time zone":     true,
+		"timestamptz":                      true, // alternate/abbreviated form
+		"timetz":                           true, // alternate/abbreviated form
+		"time":                             true,
+		"time (n)":                         true,
+		"time without time zone":           true, // [(p)]
+		"time (n) without time zone":       true, // [(p)]
+		"time with time zone":              true, // [(p)]
+		"time (n) with time zone":          true, // [(p)]
+		"tsmultirange":                     true,
+		"tsquery":                          true,
+		"tsrange":                          true,
+		"tstzmultirange":                   true,
+		"tstzrange":                        true,
+		"tsvector":                         true,
+		"txid_snapshot":                    true,
+		"uuid":                             true,
+		"varchar":                          true, // [(n)]
+		"varchar (n)":                      true, // [(n)]
+		"xml":                              true,
+		"oid":                              true, // object identifier types
+		"regclass":                         true, // object identifier types
+		"regcollation":                     true, // object identifier types
+		"regconfig":                        true, // object identifier types
+		"regdictionary":                    true, // object identifier types
+		"regnamespace":                     true, // object identifier types
+		"regoper":                          true, // object identifier types
+		"regoperator":                      true, // object identifier types
+		"regproc":                          true, // object identifier types
+		"regprocedure":                     true, // object identifier types
+		"regrole":                          true, // object identifier types
+		"regtype":                          true, // object identifier types
+		"box2d":                            true, // PostGIS extension
+		"box3d":                            true, // PostGIS extension
+		"geography":                        true, // PostGIS extension
+		"geography (geometrycollection,n)": true, // PostGIS extension
+		"geography (geometrycollection)":   true, // PostGIS extension
+		"geography (linestring,n)":         true, // PostGIS extension
+		"geography (linestring)":           true, // PostGIS extension
+		"geography (multilinestring,n)":    true, // PostGIS extension
+		"geography (multilinestring)":      true, // PostGIS extension
+		"geography (multipoint,n)":         true, // PostGIS extension
+		"geography (multipoint)":           true, // PostGIS extension
+		"geography (multipolygon,n)":       true, // PostGIS extension
+		"geography (multipolygon)":         true, // PostGIS extension
+		"geography (point,n)":              true, // PostGIS extension
+		"geography (point)":                true, // PostGIS extension
+		"geography (polygon,n)":            true, // PostGIS extension
+		"geography (polygon)":              true, // PostGIS extension
+		"geometry_dump":                    true, // PostGIS extension
+		"geometry":                         true, // PostGIS extension
+		"geometry (geometrycollection,n)":  true, // PostGIS extension
+		"geometry (geometrycollection)":    true, // PostGIS extension
+		"geometry (linestring,n)":          true, // PostGIS extension
+		"geometry (linestring)":            true, // PostGIS extension
+		"geometry (multilinestring,n)":     true, // PostGIS extension
+		"geometry (multilinestring)":       true, // PostGIS extension
+		"geometry (multipoint,n)":          true, // PostGIS extension
+		"geometry (multipoint)":            true, // PostGIS extension
+		"geometry (multipolygon,n)":        true, // PostGIS extension
+		"geometry (multipolygon)":          true, // PostGIS extension
+		"geometry (point,n)":               true, // PostGIS extension
+		"geometry (point)":                 true, // PostGIS extension
+		"geometry (polygon,n)":             true, // PostGIS extension
+		"geometry (polygon)":               true, // PostGIS extension
 	}
 
 	var z []string
 	rn := regexp.MustCompile(`^[0-9]+$`)
+	pv := ""
 
 	for i, v := range s {
 		switch v {
@@ -186,10 +215,13 @@ func (d PostgreSQLDialect) IsDatatype(s ...string) bool {
 				z = append(z, "n")
 			case i == 0:
 				z = append(z, v)
+			case pv == "(":
+				z = append(z, v)
 			default:
 				z = append(z, " "+v)
 			}
 		}
+		pv = v
 	}
 
 	k := strings.ToLower(strings.Join(z, ""))
