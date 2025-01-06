@@ -483,8 +483,6 @@ func formatBags(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken
 		switch {
 		case cTok.IsBag():
 			formatBag(e, bagMap, cTok.typeOf, cTok.id, parensDepth, false)
-		case cTok.IsCodeComment():
-			cTok = formatCodeComment(e, cTok, parensDepth)
 		default:
 			switch parensDepth {
 			case 0:
