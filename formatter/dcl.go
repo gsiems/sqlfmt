@@ -76,13 +76,11 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	nextIndents := 0
 
 	var pTok FmtToken // The previous token
-	var pNcVal string // The upper case value of the previous non-comment token
 
 	for idx := 0; idx <= idxMax; idx++ {
 
 		// current token
 		cTok := tokens[idx]
-		ctVal := cTok.AsUpper()
 
 		////////////////////////////////////////////////////////////////
 		// Determine the preceding vertical spacing (if any)
@@ -90,14 +88,13 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		ensureVSpace := idx == 0
 
 		switch {
-		case cTok.IsCodeComment(), cTok.IsLabel():
+		case cTok.IsLabel():
 			honorVSpace = true
-		case pTok.IsCodeComment(), pTok.IsLabel(), pTok.IsBag():
+		case pTok.IsLabel(), pTok.IsBag():
 			honorVSpace = true
-		}
-
-		// ensure v-space for non-comment tokens that follow a semi-colon
-		if !cTok.IsCodeComment() && pNcVal == ";" {
+		case cTok.HasLeadingComments():
+			ensureVSpace = true
+		case pTok.HasTrailingComments():
 			ensureVSpace = true
 		}
 
@@ -119,8 +116,6 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		switch {
 		case cTok.IsBag():
 			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
-		case cTok.IsCodeComment():
-			cTok = formatCodeComment(e, cTok, indents)
 		}
 
 		////////////////////////////////////////////////////////////////
@@ -134,9 +129,6 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 		// Set the various "previous token" values
 		pTok = cTok
-		if !cTok.IsCodeComment() {
-			pNcVal = ctVal
-		}
 
 		tFormatted = append(tFormatted, cTok)
 	}
