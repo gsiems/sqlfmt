@@ -34,7 +34,6 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	bagId := 0
 	parensDepth := 0
 
-	pNcVal := ""      // The upper-case value of the previous non-comment token
 	var pTok FmtToken // The previous token
 
 	for _, cTok := range m {
@@ -77,7 +76,7 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 		case false:
 			// Consider the previous token data to determine if a bag could be opened
-			switch pNcVal {
+			switch pTok.value {
 			case "", ";":
 				canOpenBag = true
 			case "/":
@@ -156,9 +155,6 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		////////////////////////////////////////////////////////////////
 		// Cache the previous token(s) data
 		pTok = cTok
-		if !cTok.IsCodeComment() {
-			pNcVal = ctVal
-		}
 	}
 
 	// On the off chance that the bag wasn't closed properly (incomplete or
@@ -371,10 +367,6 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			switch objType {
 			case "VIEW", "MATERIALIZED VIEW":
 				ensureVSpace = true
-				//default:
-				//	if ! cTok.IsCodeComment() {
-				//		honorVSpace = false
-				//	}
 			}
 
 		case "(":
@@ -388,10 +380,26 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		}
 
 		switch {
-		case cTok.IsCodeComment(), cTok.IsBag():
-			honorVSpace = true
-		case pTok.IsCodeComment(), pTok.IsBag():
-			honorVSpace = true
+		case pTok.IsBag():
+			bk := bagKey(pTok.typeOf, pTok.id)
+			b, ok := bagMap[bk]
+			if ok {
+				switch {
+				case b.HasTrailingComments():
+					ensureVSpace = true
+					//default:
+					//	switch ctVal {
+					//	case ")", ";":
+					//			honorVSpace = true
+				default:
+					honorVSpace = true
+					//	}
+				}
+			}
+		case cTok.HasLeadingComments():
+			ensureVSpace = true
+		case pTok.HasTrailingComments():
+			ensureVSpace = true
 		}
 
 		switch ctVal {
@@ -436,8 +444,6 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		switch {
 		case cTok.IsBag():
 			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
-		case cTok.IsCodeComment():
-			cTok = formatCodeComment(e, cTok, indents)
 		}
 
 		////////////////////////////////////////////////////////////////
