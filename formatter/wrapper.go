@@ -59,7 +59,7 @@ func isLogical(pKwVal string, cTok FmtToken) bool {
 	case "AND":
 		switch pKwVal {
 		case "BETWEEN", "PRECEDING", "FOLLOWING", "ROW":
-			// nada
+			return false
 		default:
 			return true
 		}
@@ -70,20 +70,7 @@ func isLogical(pKwVal string, cTok FmtToken) bool {
 }
 
 func adjLogicalCnt(logicalCnt int, pKwVal string, cTok FmtToken) int {
-
-	switch cTok.AsUpper() {
-	case "AND":
-
-		//log.Printf("adjLogicalCnt [%s] [%s] ", pKwVal, cTok.value)
-
-		switch pKwVal {
-		case "BETWEEN", "PRECEDING", "FOLLOWING", "ROW":
-			// nada
-		default:
-			return logicalCnt + 1
-		}
-	case "OR":
-		//log.Printf("adjLogicalCnt [%s]", cTok.value)
+	if isLogical(pKwVal, cTok) {
 		return logicalCnt + 1
 	}
 	return logicalCnt
@@ -1465,6 +1452,7 @@ func wrapPLxCalls(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 		return tokens
 	}
 
+debug := true
 	idxMax := len(tokens) - 1
 
 	for pdl := 1; pdl <= mxPd; pdl++ {
@@ -1491,20 +1479,36 @@ func wrapPLxCalls(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 				}
 			}
 
+if debug {
+	log.Printf ("%d  parensDepth: %d, pdl: %d, indents: %d, fcCnt: %d [%s]", cTok.id, parensDepth, pdl, indents, fcCnt, cTok.value    )
+}
+
 			if parensDepth == pdl {
 
 				switch cTok.value {
 				case ")":
+
+
+
 					if fcCnt > 1 {
 						idxEnd := idx
 						tpi := indents
 						tpd := pdl
 
+if debug {
+	log.Printf ("    idxStart: %d, idxEnd: %d", idxStart, idxEnd)
+}
+
 						for i := idxStart + 1; i < idxEnd; i++ {
 
-							if tokens[i].vSpace > 0 {
-								tpi = calcIndent(bagType, tokens[i])
-							}
+
+							//if tokens[i].vSpace > 0 {
+							//	tpi = calcIndent(bagType, tokens[i])
+							//}
+
+if debug {
+	log.Printf ("        %d  [%s]", i, tokens[i].value)
+}
 
 							switch tokens[i].value {
 							case "(":
