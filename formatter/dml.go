@@ -653,14 +653,12 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				switch nNcVal {
 				case "JOIN":
 					ensureVSpace = true
-					cTok.fbp = true
 				}
 
 			case "FULL", "LEFT", "RIGHT":
 				switch nNcVal {
 				case "OUTER", "JOIN":
 					ensureVSpace = true
-					cTok.fbp = true
 				}
 
 			case "JOIN":
