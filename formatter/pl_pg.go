@@ -688,12 +688,12 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 					}
 				}
 			}
-			//		case pTok.HasTrailingComments()
-			//			ensureVSpace = true
+		case pTok.HasTrailingComments():
+			ensureVSpace = true
 		case pTok.IsLabel():
 			ensureVSpace = true
-			//		case cTok.HasLeadingComments():
-			//			ensureVSpace = true
+		case cTok.HasLeadingComments():
+			ensureVSpace = true
 		case cTok.IsLabel(), cTok.IsBag():
 			honorVSpace = true
 		}
@@ -779,6 +779,8 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 	}
 
 	wt := wrapLines(e, PLxBody, tFormatted)
+
+	adjustCommentIndents(bagType, &wt)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)

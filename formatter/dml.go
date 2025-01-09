@@ -122,7 +122,6 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 	parensDepth := 0
 	pKwVal := ""      // The upper-case value of the previous keyword token
-	pNcVal := ""      // The upper-case value of the previous non-comment token
 	var pTok FmtToken // The previous token
 
 	for _, cTok := range m {
@@ -175,7 +174,7 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 			default:
 
-				if pNcVal == "(" {
+				if pTok.AsUpper() == "(" {
 					// ASSERTION: all sub-queries are wrapped in parens
 					canOpenChildBag = true
 				}
@@ -198,7 +197,7 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 		case false:
 			// Consider the previous token data to determine if a bag could be opened
-			switch pNcVal {
+			switch pTok.AsUpper() {
 			case "", "(", ";":
 				canOpenBag = true
 			case "BEGIN", "LOOP", "THEN", "ELSE", "IN", "AS":
@@ -208,7 +207,7 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			case "/":
 				canOpenBag = e.Dialect() == dialect.Oracle
 			default:
-				if e.Dialect() == dialect.PostgreSQL && isPgBodyBoundary(pNcVal) {
+				if e.Dialect() == dialect.PostgreSQL && isPgBodyBoundary(pTok.value) {
 					canOpenBag = true
 				} else {
 					canOpenBag = pTok.IsBag()
@@ -313,9 +312,6 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		////////////////////////////////////////////////////////////////
 		// Cache the previous token(s) data
 		pTok = cTok
-		if !cTok.IsCodeComment() {
-			pNcVal = ctVal
-		}
 		if cTok.IsKeyword() {
 			pKwVal = ctVal
 		}
@@ -501,8 +497,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
-	var pNcVal string // The upper case value of the previous non-comment token
-	//var ppNcVal string // The upper case value of the previous to the previous non-comment token
 	var pKwVal string // The upper case value of the previous keyword token
 
 	for idx := 0; idx <= idxMax; idx++ {
@@ -574,7 +568,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				}
 
 			case "WHERE":
-				if !onConflict || pNcVal != ")" {
+				if !onConflict || pTok.value != ")" {
 					ensureVSpace = true
 				}
 
@@ -598,7 +592,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					// nada
 				case cat.currentClause() == "RETURNING":
 					// nada
-				case pNcVal == "MERGE":
+				case pTok.AsUpper() == "MERGE":
 					// nada
 				default:
 					switch e.Dialect() {
@@ -619,7 +613,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				}
 
 			case "GROUP":
-				switch pNcVal {
+				switch pTok.AsUpper() {
 				case "WITHIN":
 					// nada
 				default:
@@ -642,14 +636,14 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				switch {
 				case cat.primaryAction() == "DELETE":
 					// nada
-				case pNcVal == "DISTINCT":
+				case pTok.AsUpper() == "DISTINCT":
 					// nada
 				default:
 					ensureVSpace = true
 				}
 
 			case "JOIN":
-				switch pNcVal {
+				switch pTok.AsUpper() {
 				case "LEFT", "RIGHT", "FULL", "CROSS", "LATERAL", "NATURAL", "INNER", "OUTER":
 					// nada
 				default:
@@ -664,37 +658,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					}
 				}
 			}
-
-			/*
-				switch pNcVal {
-				case ",":
-					switch {
-					//case cTok.IsCodeComment():
-					//	honorVSpace = true
-					case cat.primaryAction() == "TRUNCATE":
-						// nada
-					case cat.currentClause() == "VALUES":
-						// nada
-					//default:
-					//	ensureVSpace = true
-					}
-				}
-			*/
-			//case 1:
-			//	if cat.primaryAction() == "INSERT" {
-			//		switch cat.currentClause() {
-			//		case "INSERT":
-			//			switch pNcVal {
-			//			case ",", "(":
-			//				ensureVSpace = true
-			//			}
-			//		//case "VALUES":
-			//		//	switch pNcVal {
-			//		//	case ",", "(":
-			//		//		ensureVSpace = true
-			//		//	}
-			//		}
-			//	}
 		}
 
 		switch cat.currentClause() {
@@ -732,71 +695,11 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				}
 			}
 
-			//ensureVSpace = true
-			//case "(":
-			//	switch {
-			//	case e.Dialect() == dialect.Oracle:
-			//		// nada-- Oracle only allows one tuple per insert
-			//	case pNcVal == "VALUES":
-			//		// nada
-			//	case pNcVal == ",":
-			//		ensureVSpace = true
-			//	default:
-			//		// nada
-			//	}
-			//			switch ctVal {
-			//			case ")":
-			//				if nNcVal == "AS" {
-			//					ensureVSpace = true
-			//				}
-			//				//default:
-			//				//	if pNcVal == "," && ppNcVal == ")" {
-			//				//		ensureVSpace = true
-			//				//	}
-			//			}
 		case "WHERE", "JOIN":
-
 			if isLogical(pKwVal, cTok) {
 				ensureVSpace = true
 			}
-
-			//switch ctVal {
-			//case "OR":
-			//	ensureVSpace = true
-			//case "AND":
-			//	if pKwVal != "BETWEEN" {
-			//		ensureVSpace = true
-			//	}
-			//}
 		}
-
-		/*
-			switch ctVal {
-			case ";":
-				switch pTok.HasTrailingComments() {
-				case true:
-				ensureVSpace = true
-				case false:
-					ensureVSpace = false
-					honorVSpace = false
-				}
-			default:
-				switch {
-				case cTok.HasLeadingComments(), cTok.IsBag():
-					//ensureVSpace = false
-					honorVSpace = true
-				case cTok.IsCodeComment(), cTok.IsBag():
-					//ensureVSpace = false
-					honorVSpace = true
-				case pTok.HasTrailingComments(), pTok.IsBag():
-					//ensureVSpace = false
-					honorVSpace = true
-				case pTok.HasTrailingComments(), pTok.IsBag():
-					//ensureVSpace = false
-					honorVSpace = true
-				}
-			}
-		*/
 
 		switch {
 		case pTok.IsBag():
@@ -815,8 +718,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					//	}
 				}
 			}
-		case pTok.HasTrailingComments():
-			ensureVSpace = true
+		case cTok.HasLeadingComments(), pTok.HasTrailingComments():
+			honorVSpace = true
 		}
 
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
@@ -971,97 +874,12 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 		} // end cTok.vSpace > 0
 
-		switch {
-		case cTok.IsDMLBag(), cTok.IsDMLCaseBag():
-			bagIndent := baseIndents + cat.parensDepth()
-			switch cat.primaryAction() {
-			case "WITH":
-			// nada
-			case "DELETE", "UPDATE":
-				bagIndent++
-			default:
-				switch cat.currentClause() {
-				case "SELECT", "WHERE", "GROUP", "ORDER", "GROUP BY", "ORDER BY":
-					bagIndent += 2
-				default:
-					bagIndent++
-				}
-			}
-			formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, bagIndent, ensureVSpace)
-			/*
-				switch {
-				case cat.primaryAction() == "WITH":
-					formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth(), ensureVSpace)
-				case cat.primaryAction() == "UPDATE", cat.primaryAction() == "DELETE":
-					formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth()+1, ensureVSpace)
-				case cat.currentClause() == "SELECT", cat.currentClause() == "WHERE":
-					formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth()+2, ensureVSpace)
-				default:
-					formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth()+1, ensureVSpace)
-				}
-			*/
-			//switch cat.parensDepth() {
-			//case 0:
-			//	formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+1, ensureVSpace)
-			//default:
-			//	formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, baseIndents+cat.parensDepth()+1, ensureVSpace)
-			//}
-		case cTok.IsBag():
-			switch {
-			case cat.primaryAction() == "WITH":
-				// nada
-			case cat.parensDepth() > 0:
-				indents++
-			}
-			formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
-		}
-
-		/*
-				switch {
-				case cat.primaryAction() == "WITH":
-					indents = baseIndents + cat.parensDepth()
-				case cat.parensDepth() > 0:
-					indents++
-				}
-
-				formatDMLBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
-			case cTok.IsBag():
-				switch {
-				case cat.primaryAction() == "WITH":
-					// nada
-				case cat.parensDepth() > 0:
-					indents++
-				}
-				formatBag(e, bagMap, cTok.typeOf, cTok.id, indents, ensureVSpace)
-			}
-		*/
 		////////////////////////////////////////////////////////////////
 		// Update the type and amount of white-space before the token
 		if cTok.vSpace > 0 {
 			cTok.AdjustIndents(indents)
 		} else {
 			cTok.AdjustHSpace(e, pTok)
-		}
-
-		if pTok.IsCodeComment() && !cTok.IsCodeComment() && ctVal != ")" {
-
-			// Loop back and re-set the indent of the previous comment lines.
-			// The idea here is that the desired indentation of a comment is
-			// more likely match the next line of non-comment code vs the
-			// previous line of non-comment code
-			//
-			// If the first previous comment already has a matching indent then
-			// no further action should be needed
-			for idx := 1; idx <= len(tFormatted); idx++ {
-
-				if tFormatted[len(tFormatted)-idx].indents == cTok.indents {
-					break
-				}
-				if !tFormatted[len(tFormatted)-idx].IsCodeComment() {
-					break
-				}
-				tFormatted[len(tFormatted)-idx].indents = cTok.indents
-			}
 		}
 
 		////////////////////////////////////////////////////////////////
@@ -1075,10 +893,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 		// Set the various "previous token" values
 		pTok = cTok
-		if !cTok.IsCodeComment() {
-			//ppNcVal = pNcVal
-			pNcVal = ctVal
-		}
 		if cTok.IsKeyword() {
 			pKwVal = ctVal
 		}
@@ -1087,6 +901,34 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	}
 
 	wt := wrapLines(e, DMLBag, tFormatted)
+
+	parensDepth := 0
+	indents = 0
+	for _, cTok := range wt {
+
+		switch cTok.value {
+		case "(":
+			parensDepth++
+		case ")":
+			parensDepth--
+		default:
+			if cTok.vSpace > 0 {
+				parensDepth = 0
+				indents = cTok.indents
+				switch cTok.AsUpper() {
+				case "SELECT":
+					indents += 2
+				case "WHERE":
+					indents++
+				}
+			}
+			if cTok.IsBag() {
+				formatBag(e, bagMap, cTok.typeOf, cTok.id, indents+parensDepth, true)
+			}
+		}
+	}
+
+	adjustCommentIndents(bagType, &wt)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)

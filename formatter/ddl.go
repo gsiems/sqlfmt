@@ -462,6 +462,7 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	}
 
 	//wt := validateWhitespacing(e, DDLBag, tFormatted)
+	adjustCommentIndents (bagType, &tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, tFormatted)
