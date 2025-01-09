@@ -14,6 +14,9 @@ const (
 	LowerCase
 	DefaultCase
 	NoCase
+	WrapNone
+	WrapAll
+	WrapLong
 )
 
 type Env struct {
@@ -24,6 +27,7 @@ type Env struct {
 	formatCode      bool   // Indicate if there should be any formatting performed or not
 	preserveQuoting bool   // Preserve quoted identifiers (default is to unquote identifiers when possible)
 	wrapLongLines   bool   // Indicates if line-wrapping should be performed on long lines
+	wrapMultiTuples int    // Indicates how values with multiple tuples should be wrapped
 	minLineLength   int    // The suggested minimum line length before line-wrapping is triggered
 	maxLineLength   int    // The suggested maximum line length after which line-wrapping is triggered
 	dbdialect       dialect.DbDialect
@@ -38,6 +42,7 @@ func NewEnv() *Env {
 	e.outputFile = "-"
 	e.formatCode = true
 	e.preserveQuoting = false
+	e.wrapMultiTuples = WrapNone
 	e.wrapLongLines = true
 	e.minLineLength = 40
 	e.maxLineLength = 120
@@ -247,6 +252,17 @@ func (e *Env) SetMaxLineLength(v int) {
 }
 
 //// No wrapping
+func (e *Env) WrapMultiTuples() int {
+	return e.wrapMultiTuples
+}
+//func (e *Env) WrapAllMultiTuples() bool {
+//	return e.wrapMultiTuples == WrapAll
+//}
+//func (e *Env) WrapNoMultiTuples() bool {
+//	return e.wrapMultiTuples == WrapNone
+//}
+
+
 
 func (e *Env) WrapLongLines() bool {
 	return e.wrapLongLines
@@ -327,6 +343,9 @@ func (e *Env) SetDirectives(v string) {
 				default:
 					e.SetWrapLongLines(true)
 				}
+
+			// TODO: Add tuple wrapping
+
 			}
 		}
 	}
