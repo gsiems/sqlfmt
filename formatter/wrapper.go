@@ -191,6 +191,57 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 
 	stIdx := 0
 	idxMax := len(tokens) - 1
+	maxParensDepth := 0
+	parensDepth := 0
+	//maxDMLCaseDepth := 0
+	//dmlCaseDepth := 0
+
+	switch bagType {
+	case DMLBag:
+		for idx := 0; idx <= idxMax; idx++ {
+			parensDepth, maxParensDepth = adjParensDepth(parensDepth, maxParensDepth, tokens[idx])
+			// Assert that no supported DB uses END for anything other than
+			// CASE statements
+			//switch tokens[idx].AsUpper() {
+			//case "CASE":
+			//	dmlCaseDepth++
+			//	if dmlCaseDepth > maxDMLCaseDepth {
+			//		maxDMLCaseDepth = dmlCaseDepth
+			//	}
+			//case "END":
+			//	if dmlCaseDepth > 0 {
+			//		dmlCaseDepth--
+			//	}
+			//}
+		}
+	default:
+		for idx := 0; idx <= idxMax; idx++ {
+			parensDepth, maxParensDepth = adjParensDepth(parensDepth, maxParensDepth, tokens[idx])
+		}
+	}
+
+	switch bagType {
+	case DMLBag:
+		tokens = wrapValueTuples(e, bagType, tokens)
+		tokens = wrapDMLWindowFunctions(e, bagType, maxParensDepth, tokens)
+		tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
+		tokens = wrapJSONBuildObject(e, bagType, tokens)
+
+		// Note the following need to either be updated to better handle an
+		// entire token bag or moved to the line-by line block below (or both)
+
+		//tokens = wrapDMLCase(e, bagType, tokens)
+		//tokens = wrapDMLLogical(e, bagType, tokens)
+
+	case PLxBody:
+		tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
+		//tokens = wrapPLxLogical(e, bagType, tokens)
+	}
+	tokens = wrapInto(e, bagType, tokens)
+
+	//////////////////////////////////////////////////
+	// return tokens ////////////////////////////////////
+	//////////////////////////////////////////////////
 
 	for idx := 0; idx <= idxMax; idx++ {
 
@@ -222,7 +273,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 // wrapLine takes "one lines worth" of tokens and attempts to add line breaks
 // as needed
 func wrapLine(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
-
+return tokens
 	if len(tokens) == 0 {
 		return tokens
 	}
@@ -1460,7 +1511,6 @@ func wrapPLxCalls(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 		return tokens
 	}
 
-debug := true
 	idxMax := len(tokens) - 1
 
 	for pdl := 1; pdl <= mxPd; pdl++ {
@@ -1487,37 +1537,16 @@ debug := true
 				}
 			}
 
-if debug {
-	log.Printf ("%d  parensDepth: %d, pdl: %d, indents: %d, fcCnt: %d [%s]", cTok.id, parensDepth, pdl, indents, fcCnt, cTok.value    )
-}
-
 			if parensDepth == pdl {
 
 				switch cTok.value {
 				case ")":
-
-
-
 					if fcCnt > 1 {
 						idxEnd := idx
 						tpi := indents
 						tpd := pdl
 
-if debug {
-	log.Printf ("    idxStart: %d, idxEnd: %d", idxStart, idxEnd)
-}
-
 						for i := idxStart + 1; i < idxEnd; i++ {
-
-
-							//if tokens[i].vSpace > 0 {
-							//	tpi = calcIndent(bagType, tokens[i])
-							//}
-
-if debug {
-	log.Printf ("        %d  [%s]", i, tokens[i].value)
-}
-
 							switch tokens[i].value {
 							case "(":
 								tpd++
@@ -1525,15 +1554,20 @@ if debug {
 								tpd--
 							}
 
-							if tpd == pdl {
+							switch {
+							case tpd == pdl:
 								switch tokens[i-1].value {
 								case "(", ",":
 									tokens[i].EnsureVSpace()
 									tokens[i].AdjustIndents(tpi + tpd)
 								default:
 									if tokens[i].vSpace > 0 {
-										tokens[i].AdjustIndents(tpi + tpd)
+										tokens[i].AdjustIndents(tpd + tokens[i].indents)
 									}
+								}
+							case tpd > pdl:
+								if tokens[i].vSpace > 0 {
+									tokens[i].AdjustIndents(tpi + tpd + tokens[i].indents)
 								}
 							}
 						}
@@ -1609,7 +1643,9 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				if splitOnLogical {
 
 					pkv = ""
-					ipd := logicalIndents + 1
+					//ipd := logicalIndents + 1
+					//ipd := logicalIndents
+					ipd := 0
 
 					for i := logicalStart; i <= idx; i++ {
 
@@ -1618,15 +1654,24 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 							ipd++
 						case ")":
 							ipd--
+							//if i > logicalStart {
+							if tokens[i].vSpace > 0 {
+								tokens[i].AdjustIndents(ipd - 1)
+							}
+							//}
 						case "AND", "OR":
 							if isLogical(pkv, tokens[i]) {
 								tokens[i].EnsureVSpace()
-								tokens[i].AdjustIndents(ipd)
+								//if ipd == 0 {
+								//	tokens[i].AdjustIndents(logicalIndents + 1)
+								//} else {
+								tokens[i].AdjustIndents(logicalIndents + ipd + 1)
+								//}
 							}
 						default:
 							if i > logicalStart {
 								if tokens[i].vSpace > 0 {
-									tokens[i].AdjustIndents(ipd)
+									tokens[i].AdjustIndents(ipd + tokens[i].indents)
 								}
 							}
 						}
