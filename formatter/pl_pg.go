@@ -306,6 +306,9 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		}
 	}
 
+	// TODO: If any bags are still open, then close them (for example, a body
+	// that is missing the final semi-colon)
+
 	// If the token map is not empty (PL was found and tagged) then populate
 	// the bagMap
 	for bagId, bagTokens := range tokMap {
@@ -423,8 +426,8 @@ func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 	for idx := 0; idx <= idxMax; idx++ {
 
 		switch tokens[idx].AsUpper() {
-		case "AND", "ANY", "AS", "ATOMIC", "BEGIN", "BREAK", "CASE", "CLOSE",
-			"CONCURRENTLY", "CONTINUE", "DECLARE", "DISTINCT", "ELSE",
+		case "AND", "ANY", "AS", "ATOMIC", "BEGIN", "BETWEEN", "BREAK", "CASE",
+			"CLOSE", "CONCURRENTLY", "CONTINUE", "DECLARE", "DISTINCT", "ELSE",
 			"ELSEIF", "ELSIF", "END", "END CASE", "END IF", "END LOOP",
 			"EXECUTE", "EXCEPTION", "EXISTS", "EXIT", "FETCH", "FOR",
 			"FOREACH", "FOUND", "FROM", "GET", "IF", "IN", "INTO", "IS",
@@ -561,13 +564,16 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		switch ctVal {
 		case "BEGIN", "BREAK", "CALL", "CASE", "CLOSE", "CONTINUE", "DECLARE",
 			"ELSE", "ELSEIF", "ELSIF", "END", "END CASE", "END IF", "END LOOP",
-			"EXCEPTION", "EXIT", "FOR", "IF", "LOOP", "OPEN", "RETURN",
-			"WHILE":
+			"EXCEPTION", "EXIT", "FOR", "FOREACH", "IF", "INTO",
+			"OPEN", "RETURN", "WHILE":
 
 			ensureVSpace = true
 
 		case "EXECUTE":
-			if ptVal != "IN" {
+			switch ptVal {
+			case "FOR", "IN":
+				// nada
+			default:
 				ensureVSpace = true
 			}
 
@@ -724,6 +730,8 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 				}
 			case "ELSIF", "ELSEIF", "ELSE":
 				indents--
+			case "INTO":
+				indents++
 			}
 
 			if bbStack.LastBlock() == "EXCEPTION" {
