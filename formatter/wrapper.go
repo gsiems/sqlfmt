@@ -1696,16 +1696,16 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
-	//log.Print("wrapValueTuples")
-
 	if len(tokens) == 0 {
 		return tokens
 	}
 
-	// If there is only one values tuple then there is nothing to wrap
-	// If there are more than one values tuple then each tuple should be on a separate line
+	// If there is only one values tuple then there is nothing to wrap (other
+	// than the elements in the tuple)
 
-	// TODO: proper wrapping of long tuples per wrapOnCommas
+	// If there are more than one values tuple then each tuple should be on a
+	// separate line and the elements within should be wrapped according to
+	// the e.WrapMultiTuples() value
 
 	idxStart := 0
 	indents := 0
@@ -1713,7 +1713,10 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	parensDepth := 0
 	pdl := 0
 	ptVal := ""
-
+	tplStart := 0
+	indentLen := 0
+	tplWrapping := 0
+	hasMultiTuples := false
 	idxMax := len(tokens) - 1
 
 	for idx := 0; idx <= idxMax; idx++ {
@@ -1722,6 +1725,7 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 		if cTok.vSpace > 0 {
 			indents = calcIndent(bagType, cTok)
+			indentLen = len(strings.Repeat(e.Indent(), indents))
 		}
 
 		switch cTok.value {
@@ -1733,14 +1737,16 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				pdl = parensDepth
 				inValues = true
 				idxStart = idx
-
+				tplStart = idx
 			case ",":
 				if parensDepth == pdl && inValues {
+					tplStart = idx
+					//tplCnt++
 					tokens[idx].EnsureVSpace()
-					tokens[idx].AdjustIndents(indents + parensDepth - 1)
+					tokens[idx].AdjustIndents(indents)
 					if tokens[idxStart].vSpace == 0 {
 						tokens[idxStart].EnsureVSpace()
-						tokens[idxStart].AdjustIndents(indents + parensDepth - 1)
+						tokens[idxStart].AdjustIndents(indents)
 					}
 				}
 			}
@@ -1748,18 +1754,80 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 		case ")":
 			switch {
 			case parensDepth == pdl:
+				if inValues {
+					// Wrap, or not, the elements within the tuple
+
+					// Check the next token to determine if there are multiple
+					// tuples involved and, if so, determine how to wrap them
+					if tplWrapping == 0 {
+						if idx < idxMax {
+							if tokens[idx+1].value == "," {
+								hasMultiTuples = true
+								tplWrapping = e.WrapMultiTuples()
+							}
+						}
+						// if there is only one tuple then it gets wrapped regardless
+						if !hasMultiTuples {
+							tplWrapping = env.WrapAll
+						}
+					}
+
+					wrapTuple := false
+					switch tplWrapping {
+					case env.WrapNone:
+						// nada
+					case env.WrapAll:
+						wrapTuple = true
+					default:
+						// Wrap Auto
+						tplLen := calcSliceLen(e, bagType, tokens[tplStart:idx])
+						if tplLen+indentLen > e.MaxLineLength() {
+							wrapTuple = true
+						}
+					}
+
+					if wrapTuple {
+						tpd := 0
+						for i := tplStart; i <= idx; i++ {
+							switch tokens[i].value {
+							case "(":
+								tpd++
+								switch tokens[i-1].value {
+								case ",":
+									// in the off chance that there is a parenthetical value in the tuple
+									if tpd == 2 {
+										tokens[i].EnsureVSpace()
+										tokens[i].AdjustIndents(indents + 1)
+									}
+								}
+							case ")":
+								tpd--
+							default:
+								switch tokens[i-1].value {
+								case ",", "(":
+									if tpd == 1 {
+										tokens[i].EnsureVSpace()
+										tokens[i].AdjustIndents(indents + 1)
+									}
+								}
+							}
+						}
+					}
+				}
+
 				if ptVal == ")" {
 					tokens[idx].EnsureVSpace()
-					tokens[idx].AdjustIndents(indents + parensDepth - 1)
+					tokens[idx].AdjustIndents(indents)
 				}
 			case parensDepth < pdl:
 				if ptVal == ")" {
 					tokens[idx].EnsureVSpace()
-					tokens[idx].AdjustIndents(indents + parensDepth - 1)
+					tokens[idx].AdjustIndents(indents)
 				}
 				inValues = false
 				idxStart = 0
 				pdl = 0
+				tplStart = 0
 			}
 			parensDepth--
 		case ";":
