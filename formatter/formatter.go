@@ -611,31 +611,12 @@ func untagBags(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 func unstashComments(e *env.Env, tokens []FmtToken) []FmtToken {
 
 	var ret []FmtToken
+	idxMax := len(tokens) - 1
 
-	lIndents := 0
-	tIndents := 0
-	lpd := 0
+	for idx := 0; idx <= idxMax; idx++ {
+		cTok := tokens[idx]
 
-	for _, cTok := range tokens {
 
-		if cTok.vSpace > 0 {
-			lIndents = cTok.indents
-			lpd = 0
-
-			// TODO: the desired indentation of the trailing comments isn't
-			// always the same as for the leading comments. Having lost the
-			// bagType information at this point we need another way of
-			// determining the trailing indentation.
-
-			tIndents = lIndents
-		}
-
-		switch cTok.value {
-		case "(":
-			lpd++
-		case ")":
-			lpd--
-		}
 
 		if len(cTok.ledComments) > 0 {
 			for _, ct := range cTok.ledComments {
@@ -647,9 +628,6 @@ func unstashComments(e *env.Env, tokens []FmtToken) []FmtToken {
 					hSpace:     ct.hSpace,
 					indents:    ct.indents,
 				}
-				if nt.vSpace > 0 {
-					nt.indents = lIndents + lpd
-				}
 				ret = append(ret, nt)
 			}
 			cTok.ledComments = nil
@@ -659,16 +637,17 @@ func unstashComments(e *env.Env, tokens []FmtToken) []FmtToken {
 
 		if len(cTok.trlComments) > 0 {
 			for _, ct := range cTok.trlComments {
+				indents := 0
+				if idx < idxMax {
+					indents = ct.indents
+				}
 				nt := FmtToken{
 					categoryOf: parser.Comment,
 					typeOf:     ct.typeOf,
 					value:      ct.value,
 					vSpace:     ct.vSpace,
 					hSpace:     ct.hSpace,
-					indents:    ct.indents,
-				}
-				if nt.vSpace > 0 {
-					nt.indents = tIndents + lpd
+					indents:    indents,
 				}
 				ret = append(ret, nt)
 			}
