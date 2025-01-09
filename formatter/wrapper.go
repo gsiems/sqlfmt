@@ -33,7 +33,15 @@ func calcIndent(bagType int, cTok FmtToken) int {
 		}
 	case PLxBody:
 		switch cTok.AsUpper() {
+		case "IF", "CASE", "LOOP":
+			indents++
+		case "DECLARE", "BEGIN":
+			indents++
+		case "FOR":
+			indents++
 		case "WHEN", "THEN", "ELSE":
+			indents++
+		case "EXCEPTION":
 			indents++
 		}
 	}
