@@ -434,15 +434,15 @@ func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		switch ctVal {
 		case "ALL", "AND", "ANY", "AS", "ASC", "BETWEEN", "BY", "CASCADE",
 			"CASE", "COLLATE", "CONCURRENTLY", "CONFLICT", "CONSTRAINT",
-			"CROSS", "CURRENT", "DATA", "DELETE", "DESC", "DISTINCT", "DO",
-			"ELSE", "END", "EXCEPT", "EXISTS", "FETCH", "FIRST", "FOR",
-			"FOR UPDATE", "FROM", "FULL", "GROUP", "HAVING", "IDENTITY", "IN",
-			"INNER", "INSERT", "INTERSECT", "INTO", "IS", "JOIN", "LAST",
-			"LATERAL", "LEFT", "LIKE", "LIMIT", "MATCHED", "MATERIALIZED",
-			"MERGE", "MINUS", "NATURAL", "NEXT", "NFC", "NFD", "NFKC", "NFKD",
-			"NO", "NORMALIZED", "NOT", "NOTHING", "NOWAIT", "NULL", "NULLS",
-			"OF", "OFFSET", "ON", "ON CONFLICT", "ONLY", "OR", "ORDER",
-			"ORDER BY", "OUTER", "OVER", "OVERRIDING", "PARTITION",
+			"CROSS", "CURRENT", "DATA", "DEFAULT", "DELETE", "DESC",
+			"DISTINCT", "DO", "ELSE", "END", "EXCEPT", "EXISTS", "FETCH",
+			"FIRST", "FOR", "FOR UPDATE", "FROM", "FULL", "GROUP", "HAVING",
+			"IDENTITY", "IN", "INNER", "INSERT", "INTERSECT", "INTO", "IS",
+			"JOIN", "LAST", "LATERAL", "LEFT", "LIKE", "LIMIT", "MATCHED",
+			"MATERIALIZED", "MERGE", "MINUS", "NATURAL", "NEXT", "NFC", "NFD",
+			"NFKC", "NFKD", "NO", "NORMALIZED", "NOT", "NOTHING", "NOWAIT",
+			"NULL", "NULLS", "OF", "OFFSET", "ON", "ON CONFLICT", "ONLY", "OR",
+			"ORDER", "ORDER BY", "OUTER", "OVER", "OVERRIDING", "PARTITION",
 			"PARTITION BY", "RECURSIVE", "REFRESH", "REINDEX", "RESTART",
 			"RETURNING", "RIGHT", "ROW", "ROWS", "SELECT", "SET", "SHARE",
 			"SOURCE", "SYSTEM", "TABLE", "TARGET", "TEMP", "TEMPORARY", "THEN",
@@ -510,12 +510,20 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		case 0:
 
 			switch ctVal {
-			case "DELETE", "FROM", "GROUP BY", "HAVING", "INSERT", "INTERSECT",
+			case "DELETE", "GROUP BY", "HAVING", "INSERT", "INTERSECT",
 				"JOIN", "MERGE", "MINUS", "ORDER BY", "REFRESH", "REINDEX",
 				"RETURNING", "SELECT", "SET", "TRUNCATE", "UNION", "UPDATE",
 				"UPSERT", "VALUES", "WHERE", "WITH":
 
 				cat.updateClause(ctVal)
+
+			case "FROM":
+				switch pKwVal {
+				case "DISTINCT":
+					// nada
+				default:
+					cat.updateClause(ctVal)
+				}
 
 			case "ON CONFLICT":
 				onConflict = true
@@ -553,11 +561,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				ensureVSpace = true
 			case cat.currentAction():
 				ensureVSpace = true
-			case "CROSS", "DELETE", "EXCEPT", "FULL", "HAVING", "INNER",
-				"INSERT", "INTERSECT", "LEFT", "LIMIT", "MERGE", "MINUS",
-				"NATURAL", "OFFSET", "ORDER", "REFRESH", "REINDEX",
-				"RETURNING", "RIGHT", "SELECT", "TRUNCATE", "UNION", "UPSERT",
-				"USING", "GROUP BY", "ORDER BY":
+			case "DELETE", "EXCEPT", "HAVING", "INSERT", "INTERSECT", "LIMIT",
+				"MERGE", "MINUS", "OFFSET", "ORDER", "REFRESH", "REINDEX",
+				"RETURNING", "SELECT", "TRUNCATE", "UNION", "UPSERT", "USING",
+				"GROUP BY", "ORDER BY":
 
 				ensureVSpace = true
 
@@ -642,6 +649,20 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					ensureVSpace = true
 				}
 
+			case "CROSS", "INNER", "NATURAL":
+				switch nNcVal {
+				case "JOIN":
+					ensureVSpace = true
+					cTok.fbp = true
+				}
+
+			case "FULL", "LEFT", "RIGHT":
+				switch nNcVal {
+				case "OUTER", "JOIN":
+					ensureVSpace = true
+					cTok.fbp = true
+				}
+
 			case "JOIN":
 				switch pTok.AsUpper() {
 				case "LEFT", "RIGHT", "FULL", "CROSS", "LATERAL", "NATURAL", "INNER", "OUTER":
@@ -713,8 +734,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					//	switch ctVal {
 					//	case ")", ";":
 					//			honorVSpace = true
-					//	default:
-					//		honorVSpace = true
+				default:
+					honorVSpace = true
 					//	}
 				}
 			}
@@ -761,7 +782,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					case cat.currentAction() == "SELECT":
 						localIndents = 2
 					case cTok.IsBag():
-						localIndents = 1
+						// localIndents = 1
 					default:
 						localIndents = 2
 					}
@@ -785,11 +806,15 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					case "ON":
 						localIndents = 3
 					case ")":
-						localIndents = 2
+						if pKwVal == "VALUES" {
+							localIndents = 2
+						} else {
+							localIndents = 2
+						}
 					default:
 						switch {
 						case cTok.IsBag():
-							localIndents = 2
+						//	localIndents = 2
 						default:
 							localIndents = 3
 						}
