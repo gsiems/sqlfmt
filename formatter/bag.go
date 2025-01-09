@@ -60,7 +60,6 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 	bagType := 0
 	forObj := ""
 
-	pNcVal := ""
 	var pTok FmtToken
 
 	for _, cTok := range m {
@@ -77,7 +76,7 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 				closeBag = true
 			}
 		case false:
-			switch pNcVal {
+			switch pTok.value {
 			case "", ";":
 				canOpenBag = true
 			case "/":
@@ -176,9 +175,6 @@ func tagSimple(e *env.Env, m []FmtToken, bagMap map[string]TokenBag, cmdKwd stri
 
 		// set the previous token(s) data
 		pTok = cTok
-		if !cTok.IsCodeComment() {
-			pNcVal = ctVal
-		}
 	}
 
 	// On the off chance that the bag wasn't closed properly (incomplete or
