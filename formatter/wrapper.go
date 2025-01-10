@@ -225,7 +225,13 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 		tokens = wrapValueTuples(e, bagType, tokens)
 		tokens = wrapDMLWindowFunctions(e, bagType, maxParensDepth, tokens)
 		tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
-		tokens = wrapJSONBuildObject(e, bagType, tokens)
+
+		switch e.Dialect() {
+		case dialect.PostgreSQL:
+			tokens = wrapOnMod2Commas(e, bagType, "JSON_BUILD_OBJECT", true, tokens)
+		case dialect.Oracle:
+			tokens = wrapOnMod2Commas(e, bagType, "DECODE", false, tokens)
+		}
 
 		// Note the following need to either be updated to better handle an
 		// entire token bag or moved to the line-by line block below (or both)
@@ -273,7 +279,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 // wrapLine takes "one lines worth" of tokens and attempts to add line breaks
 // as needed
 func wrapLine(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
-return tokens
+	return tokens
 	if len(tokens) == 0 {
 		return tokens
 	}
@@ -362,14 +368,14 @@ return tokens
 			tokens = wrapDMLLogical(e, bagType, tokens)
 		}
 
-		if jboCnt > 0 {
-			tokens = wrapJSONBuildObject(e, bagType, tokens)
-		}
+		//if jboCnt > 0 {
+		//	tokens = wrapJSONBuildObject(e, bagType, tokens)
+		//}
 	}
 
-	if fatCommaCnt > 1 {
-		tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
-	}
+	//if fatCommaCnt > 1 {
+	//	tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
+	//}
 
 	if intoCnt > 0 {
 		tokens = wrapInto(e, bagType, tokens)
@@ -654,27 +660,17 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 
 }
 
-func wrapJSONBuildObject(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
+func wrapOnMod2Commas(e *env.Env, bagType int, fcnName string, wrapEven bool, tokens []FmtToken) []FmtToken {
 
 	if len(tokens) == 0 {
 		return tokens
 	}
 
-	switch e.Dialect() {
-	case dialect.PostgreSQL:
-		// nada
-	default:
-		return tokens
-	}
-
-	// If there is only one element then there is nothing to wrap
-	// If there are more than one element then each element should be on a separate line
-
 	cCnt := 0
 	idxStart := 0
 	indents := 0
-	inJBO := false
-	jboParensDepth := 0
+	inFcn := false
+	fcnParensDepth := 0
 	parensDepth := 0
 
 	idxMax := len(tokens) - 1
@@ -684,7 +680,7 @@ func wrapJSONBuildObject(e *env.Env, bagType int, tokens []FmtToken) []FmtToken 
 		cTok := tokens[idx]
 
 		if cTok.vSpace > 0 {
-			if !inJBO {
+			if !inFcn {
 				indents = calcIndent(bagType, cTok)
 			}
 		}
@@ -696,26 +692,33 @@ func wrapJSONBuildObject(e *env.Env, bagType int, tokens []FmtToken) []FmtToken 
 		switch cTok.value {
 		case "(":
 			parensDepth++
-			if ptVal == "JSON_BUILD_OBJECT" {
-				jboParensDepth = parensDepth
-				inJBO = true
+			if ptVal == fcnName {
+				fcnParensDepth = parensDepth
+				inFcn = true
 				cCnt = 0
 				idxStart = idx
 			}
 		case ")":
-			if jboParensDepth == parensDepth {
-				inJBO = false
-				jboParensDepth = 0
+			if fcnParensDepth == parensDepth {
+				inFcn = false
+				fcnParensDepth = 0
 			}
 			parensDepth--
 		}
 
 		switch {
-		case inJBO:
+		case inFcn:
 			switch ptVal {
 			case ",":
 				cCnt++
-				if cCnt%2 == 0 {
+				addWrap := false
+				switch {
+				case wrapEven && cCnt%2 == 0:
+					addWrap = true
+				case !wrapEven && cCnt%2 == 1:
+					addWrap = true
+				}
+				if addWrap {
 					tokens[idx].EnsureVSpace()
 					tokens[idx].AdjustIndents(indents + parensDepth)
 					if tokens[idxStart+1].vSpace == 0 {
