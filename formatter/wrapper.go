@@ -824,6 +824,7 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 	//var cIdxs []int
 	wrapOnOpenParens := false
 	debug := false
+	disableWrapping := false
 
 	if debug {
 		log.Printf("%d    pdl: %d, len(tokens): %d [%s]", tokens[0].id, pdl, len(tokens), tokens[0].value)
@@ -902,6 +903,9 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 				default:
 					switch pKwVal {
 					case "VALUES":
+						// taken care of by wrapValueTuples
+						disableWrapping = true
+					case "INTO", "INSERT":
 						wrapOnOpenParens = true
 					case "CALL":
 						if e.Dialect() == dialect.PostgreSQL {
@@ -923,28 +927,26 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 		// if idxStart is less than idxLineStart then wrap starting at the idxLineStart
 		// if idxStart is greater than idxLineStart then wrap starting at the idxStart
 
-		if parensDepth == pdl {
-
-			switch tokens[idx].value {
-			case ",":
+		switch tokens[idx].value {
+		case ",":
+			if parensDepth == pdl {
 				cCnt++
-			case "=>":
-				formatTokens = false
-			case ")":
-				doCheck = true
-				if idxLineStart > idxStart {
-					idxStart = idxLineStart
-				}
-
 			}
-		}
-
-		if parensDepth >= pdl {
-			if tokens[idx].vSpace > 0 {
-				doCheck = true
-				if idxLineStart > idxStart {
-					idxStart = idxLineStart
-				}
+		case "=>":
+			if parensDepth == pdl {
+				formatTokens = false
+			}
+		case ";":
+			disableWrapping = false
+		case ")":
+			switch {
+			case parensDepth == pdl:
+				doCheck = !disableWrapping
+			case parensDepth < pdl:
+				disableWrapping = false
+				//if idxLineStart > idxStart {
+				//	idxStart = idxLineStart
+				//}
 			}
 		}
 
@@ -1040,12 +1042,12 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 			}
 		}
 
-		if parensDepth >= pdl {
-			if tokens[idx].vSpace > 0 {
-				indents = calcIndent(bagType, tokens[idx])
-				idxLineStart = idx
-			}
-		}
+		//if parensDepth >= pdl {
+		//	if tokens[idx].vSpace > 0 {
+		//		indents = calcIndent(bagType, tokens[idx])
+		//		idxLineStart = idx
+		//	}
+		//}
 
 		switch tokens[idx].value {
 		case ")":
