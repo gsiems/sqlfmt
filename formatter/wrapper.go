@@ -236,7 +236,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 		// Note the following need to either be updated to better handle an
 		// entire token bag or moved to the line-by line block below (or both)
 
-		//tokens = wrapDMLCase(e, bagType, tokens)
+		tokens = wrapDMLCase(e, bagType, tokens)
 		//tokens = wrapDMLLogical(e, bagType, tokens)
 
 	case PLxBody:
@@ -315,7 +315,7 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 	return tokens
 }
 
-func wrapDMLCase(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
+func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 	if len(tokens) == 0 {
 		return tokens
@@ -353,105 +353,143 @@ func wrapDMLCase(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 	//       else 4
 	//       end
 
-	// Fortunately DML case statements have been separated into their own bag
-
-	caseDepth := 0
-	caseIdx := 0
 	idxMax := len(tokens) - 1
-	indents := 0
-	parensDepth := 0
-	pKwVal := ""
-	var caseIdxs intStack
+	cdMax := 0
+	caseDepth := 0
 
-	caseWraps := make(map[int]bool)
-	caseIndents := make(map[int]int)
-	logicCnts := make(map[int]int)
-	whenCnts := make(map[int]int)
-
-	lineLen := calcSliceLen(e, bagType, tokens)
-
+	// determine the max case depth
 	for idx := 0; idx <= idxMax; idx++ {
-
-		if tokens[idx].vSpace > 0 {
-			indents = calcIndent(bagType, tokens[idx])
-		}
-
 		switch tokens[idx].AsUpper() {
-		case "(":
-			parensDepth++
-		case ")":
-			parensDepth--
 		case "CASE":
-			caseIdx = idx
-			caseIdxs.Push(idx)
 			caseDepth++
-		case "WHEN", "ELSE":
-			whenCnts[caseIdx]++
-		case "AND", "OR":
-			if isLogical(pKwVal, tokens[idx]) {
-				logicCnts[caseIdx]++
-			}
+			cdMax = max(cdMax, caseDepth)
 		case "END":
-			if caseDepth > 0 {
-				//caseLen := calcSliceLen(e, bagType, tokens[caseIdx:idx])
-				//caseLens[caseIdx] = caseLen
-
-				whenCnt, _ := whenCnts[caseIdx]
-				logicCnt, _ := logicCnts[caseIdx]
-
-				switch {
-				case whenCnt > 2, logicCnt > 0, lineLen > e.MaxLineLength():
-					caseWraps[caseIdx] = true
-					caseIndents[caseIdx] = indents + parensDepth + caseDepth
-				default:
-					caseWraps[caseIdx] = false
-				}
-
-				caseDepth--
-			}
-
-			_ = caseIdxs.Pop()
-			caseIdx = caseIdxs.Peek()
-		}
-		if tokens[idx].IsKeyword() {
-			pKwVal = tokens[idx].AsUpper()
+			caseDepth--
 		}
 	}
 
-	caseIdxs.Reset()
-	addWraps := false
-	cIndent := 0
-	for idx := 0; idx <= idxMax; idx++ {
+	if cdMax == 0 {
+		return tokens
+	}
 
-		switch tokens[idx].AsUpper() {
-		case "CASE":
-			caseIdx = idx
-			caseIdxs.Push(idx)
-			addWraps, _ = caseWraps[caseIdx]
-			cIndent, _ = caseIndents[caseIdx]
-		case "AND", "OR":
-			if isLogical(pKwVal, tokens[idx]) {
-				if addWraps {
-					tokens[idx].EnsureVSpace()
-					tokens[idx].AdjustIndents(cIndent + 1)
+	for cdl := 1; cdl <= cdMax; cdl++ {
+
+		caseDepth = 0
+		idxStart := 0
+		idxWhen := 0
+		indents := 0
+		idxThens := make(map[int]int)
+		whenLens := make(map[int]int)
+		whenLgcl := make(map[int][]int)
+		var idxWhens []int
+
+		for idx := 0; idx <= idxMax; idx++ {
+
+			switch tokens[idx].AsUpper() {
+			case "CASE":
+				caseDepth++
+			}
+
+			if caseDepth < cdl {
+				if tokens[idx].vSpace > 0 {
+					indents = calcIndent(bagType, tokens[idx])
 				}
 			}
-		case "WHEN", "ELSE", "END":
-			if addWraps {
-				tokens[idx].EnsureVSpace()
-				tokens[idx].AdjustIndents(cIndent)
-			}
-		}
 
-		switch tokens[idx].AsUpper() {
-		case "END":
-			_ = caseIdxs.Pop()
-			caseIdx = caseIdxs.Peek()
-			if caseIdxs.Len() > 0 {
-				addWraps, _ = caseWraps[caseIdx]
-				cIndent, _ = caseIndents[caseIdx]
-			} else {
-				addWraps = false
+			if caseDepth == cdl {
+
+				switch tokens[idx].AsUpper() {
+				case "CASE":
+					idxStart = idx
+					idxWhens = nil
+
+				case "WHEN", "ELSE":
+					if idxWhen > 0 {
+						whenLens[idxWhen] = calcSliceLen(e, bagType, tokens[idxWhen:idx])
+					}
+					idxWhens = append(idxWhens, idx)
+
+					idxWhen = idx
+				case "THEN":
+					idxThens[idxWhen] = idx
+
+				case "END":
+					whenLens[idxWhen] = calcSliceLen(e, bagType, tokens[idxWhen:idx])
+					idxEnd := idx
+					lenCase := calcSliceLen(e, bagType, tokens[idxStart:idxEnd])
+					lenToEnd := 0
+					// TODO: if the next token is "AS" then include lenToEnd?
+					if idx < idxMax {
+						switch tokens[idx+1].AsUpper() {
+						case "AS": //, "||", "+", "-", "/", "*" :
+							lenToEnd = calcLenToLineEnd(e, bagType, tokens[idxEnd:])
+						}
+					}
+
+					addBreaks := false
+					switch {
+					case len(idxWhens) > 2:
+						addBreaks = true
+					case lenCase+lenToEnd > e.MaxLineLength():
+						addBreaks = true
+					}
+
+					if addBreaks {
+
+						tpi := indents
+						tpd := 0
+						leadLen := len(strings.Repeat(e.Indent(), tpi))
+
+						for i := idxStart; i <= idxEnd; i++ {
+
+							switch tokens[i].value {
+							case "(":
+								tpd++
+							case ")":
+								tpd--
+							}
+
+							if whenLen, ok := whenLens[i]; ok {
+								tokens[i].EnsureVSpace()
+								tokens[i].AdjustIndents(tpi + 1)
+
+								if leadLen+whenLen > e.MaxLineLength() {
+									if thenIdx, ok := idxThens[i]; ok {
+										tokens[thenIdx+1].EnsureVSpace()
+										tokens[thenIdx+1].AdjustIndents(tpi + 2)
+									}
+								}
+
+								if idxLgcls, ok := whenLgcl[i]; ok {
+									if len(idxLgcls) > 1 {
+										for _, j := range idxLgcls {
+											tokens[j].EnsureVSpace()
+											tokens[j].AdjustIndents(tpi + tpd + 2)
+										}
+									}
+								}
+							}
+						}
+						tokens[idxEnd].EnsureVSpace()
+						tokens[idxEnd].AdjustIndents(tpi + 1)
+
+						indents = calcIndent(bagType, tokens[idx]) - 1
+					}
+				default:
+					if idx > 0 {
+						if isLogical(tokens[idx-1].AsUpper(), tokens[idx]) {
+							whenLgcl[idxWhen] = append(whenLgcl[idxWhen], idx)
+						}
+					}
+				}
+			}
+
+			switch tokens[idx].AsUpper() {
+			case "END":
+				if caseDepth == cdl {
+					idxStart = idx
+				}
+				caseDepth--
 			}
 		}
 	}
