@@ -260,14 +260,14 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 		}
 
 		if eol && idx > stIdx {
-			wt := wrapLine(e, bagType, tokens[stIdx:idx])
+			wt := wrapLine(e, bagType, maxParensDepth, tokens[stIdx:idx])
 			ret = append(ret, wt...)
 			stIdx = idx
 		}
 	}
 	switch {
 	case stIdx < idxMax:
-		wt := wrapLine(e, bagType, tokens[stIdx:])
+		wt := wrapLine(e, bagType, maxParensDepth, tokens[stIdx:])
 		ret = append(ret, wt...)
 	case stIdx == idxMax:
 		ret = append(ret, tokens[stIdx])
@@ -278,123 +278,41 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 
 // wrapLine takes "one lines worth" of tokens and attempts to add line breaks
 // as needed
-func wrapLine(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
-	return tokens
+func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
+
 	if len(tokens) == 0 {
 		return tokens
 	}
 
-	//log.Printf("  wrapLine  (%d, %d) [%s] [%s]", tokens[0].id, tokens[len(tokens)-1].id, tokens[0].value, tokens[len(tokens)-1].value)
-
-	// ASSERTION: The line is properly indented prior to wrapping.
-	// Therefore, the only parensDepth that should matter is the depth within
-	// the line itself. This does imply that negative depths are possible.
-
-	fatCommaCnt := 0
-	intoCnt := 0
-	jboCnt := 0
-	dmlLogicalCnt := 0
-	plxLogicalCnt := 0
-	maxParensDepth := 0
-	parensDepth := 0
-	pKwVal := ""
-	valuesCnt := 0
-	winFncCnt := 0
-	dmlCaseCnt := 0
-
 	lineLen := calcSliceLen(e, bagType, tokens)
-	idxMax := len(tokens) - 1
-
-	for idx := 0; idx <= idxMax; idx++ {
-		cTok := tokens[idx]
-		parensDepth, maxParensDepth = adjParensDepth(parensDepth, maxParensDepth, cTok)
-
-		switch cTok.AsUpper() {
-		case "(":
-			parensDepth++
-		case ")":
-			parensDepth--
-		case "AND", "OR":
-			switch bagType {
-			case DMLBag:
-				dmlLogicalCnt = adjLogicalCnt(dmlLogicalCnt, pKwVal, cTok)
-			case PLxBody:
-				plxLogicalCnt = adjLogicalCnt(plxLogicalCnt, pKwVal, cTok)
-			}
-
-		case "CASE":
-			if bagType == DMLBag {
-				dmlCaseCnt++
-			}
-
-		case "=>":
-			fatCommaCnt++
-		case "JSON_BUILD_OBJECT":
-			jboCnt++
-		case "VALUES":
-			valuesCnt++
-		case "INTO":
-			intoCnt++
-		case "ORDER BY", "GROUP BY", "PARTITION BY":
-			if parensDepth > 0 {
-				winFncCnt++
-			}
-		}
-
-		if cTok.IsKeyword() {
-			pKwVal = cTok.AsUpper()
-		}
-	}
-
-	if valuesCnt > 0 {
-		tokens = wrapValueTuples(e, bagType, tokens)
-	}
-
-	switch bagType {
-	case PLxBody:
-		if plxLogicalCnt > 0 {
-			tokens = wrapPLxLogical(e, bagType, tokens)
-		}
-	case DMLBag:
-		if winFncCnt > 0 {
-			tokens = wrapDMLWindowFunctions(e, bagType, maxParensDepth, tokens)
-		}
-
-		if dmlCaseCnt > 0 {
-			tokens = wrapDMLCase(e, bagType, maxParensDepth, tokens)
-		}
-
-		if dmlLogicalCnt > 0 {
-			tokens = wrapDMLLogical(e, bagType, tokens)
-		}
-
-		//if jboCnt > 0 {
-		//	tokens = wrapJSONBuildObject(e, bagType, tokens)
-		//}
-	}
-
-	//if fatCommaCnt > 1 {
-	//	tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
-	//}
-
-	if intoCnt > 0 {
-		tokens = wrapInto(e, bagType, tokens)
-	}
 
 	if lineLen > e.MaxLineLength() {
 
-		for pdl := 0; pdl <= maxParensDepth; pdl++ {
+		for pdl := 0; pdl <= mxPd; pdl++ {
 
-			tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
-			tokens = wrapOnCommas(e, bagType, pdl, tokens)
-			tokens = wrapOnCompOps(e, bagType, pdl, tokens)
-			tokens = wrapOnMathOps(e, bagType, pdl, tokens)
+			// A work in progress...
+			// Order matters but may be/is probably context specific...
+			// Maybe consider the original vSpace for operators
+			switch pdl {
+			case 0:
+
+				tokens = wrapOnCommas(e, bagType, pdl, tokens)
+				tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
+				tokens = wrapOnMathOps(e, bagType, pdl, tokens)
+				tokens = wrapOnCompOps(e, bagType, pdl, tokens)
+
+			default:
+
+				tokens = wrapOnMathOps(e, bagType, pdl, tokens)
+				tokens = wrapOnCompOps(e, bagType, pdl, tokens)
+				tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
+				tokens = wrapOnCommas(e, bagType, pdl, tokens)
+			}
 
 		}
-
 	}
 
-	return validateWhitespacing(e, bagType, tokens)
+	return tokens
 }
 
 func wrapDMLCase(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
@@ -937,6 +855,8 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 				case ppKwVal == "INSERT" && pKwVal == "INTO":
 					formatTokens = false
 				case ptVal == "JSON_BUILD_OBJECT":
+					formatTokens = false
+				case ptVal == "DECODE":
 					formatTokens = false
 				case ptVal == "IN":
 					wrapOnLength = true
