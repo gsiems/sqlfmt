@@ -684,7 +684,9 @@ func wrapJSONBuildObject(e *env.Env, bagType int, tokens []FmtToken) []FmtToken 
 		cTok := tokens[idx]
 
 		if cTok.vSpace > 0 {
-			indents = calcIndent(bagType, cTok)
+			if !inJBO {
+				indents = calcIndent(bagType, cTok)
+			}
 		}
 		ptVal := ""
 		if idx > 0 {
@@ -708,7 +710,8 @@ func wrapJSONBuildObject(e *env.Env, bagType int, tokens []FmtToken) []FmtToken 
 			parensDepth--
 		}
 
-		if inJBO {
+		switch {
+		case inJBO:
 			switch ptVal {
 			case ",":
 				cCnt++
