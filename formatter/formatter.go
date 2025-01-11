@@ -140,7 +140,7 @@ func stashComments(e *env.Env, tokens []parser.Token) []FmtToken {
 
 			nt := CmtToken{
 				typeOf: cTok.Type(),
-				value:  cTok.Value(),
+				value:  strings.TrimRight(cTok.Value(), "\n\r\t "),
 				vSpace: vSpace,
 				hSpace: hSpace,
 				//vSpaceOrig: cTok.VSpace()
@@ -615,8 +615,6 @@ func unstashComments(e *env.Env, tokens []FmtToken) []FmtToken {
 
 	for idx := 0; idx <= idxMax; idx++ {
 		cTok := tokens[idx]
-
-
 
 		if len(cTok.ledComments) > 0 {
 			for _, ct := range cTok.ledComments {
