@@ -150,7 +150,7 @@ func (t *FmtToken) AdjustHSpace(e *env.Env, pTok FmtToken) {
 	}
 
 	switch t.value {
-	case ",", "..":
+	case ",", "..", "[", "]":
 		t.hSpace = ""
 		return
 	}
@@ -173,6 +173,15 @@ func (t *FmtToken) AdjustHSpace(e *env.Env, pTok FmtToken) {
 				t.hSpace = ""
 				return
 			}
+		case dialect.Oracle:
+			if pTok.value == "%" {
+				t.hSpace = ""
+				return
+			}
+			if t.value == "%" {
+				t.hSpace = ""
+				return
+			}
 		}
 
 		if t.IsIdentifier() && strings.HasSuffix(pTok.value, ".") {
@@ -185,8 +194,13 @@ func (t *FmtToken) AdjustHSpace(e *env.Env, pTok FmtToken) {
 			return
 		}
 
+		if pTok.value == ")" && strings.HasPrefix(t.value, ".") {
+			t.hSpace = ""
+			return
+		}
+
 		switch string(pTok.value[len(pTok.value)-1]) + t.value {
-		case "()", "(*", "*)", ".*":
+		case "()", "(*", "*)", ".*", "[]":
 			t.hSpace = ""
 			return
 		}
