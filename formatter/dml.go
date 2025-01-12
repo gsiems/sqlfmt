@@ -710,6 +710,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			switch pTok.value {
 			case ",":
 				if cat.parensDepth() == 0 {
+					cTok.fbp = true
 					ensureVSpace = true
 				}
 			}
@@ -918,6 +919,11 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		pTok = cTok
 		if cTok.IsKeyword() {
 			pKwVal = ctVal
+		}
+
+		// set the line wrapping break points
+		if cTok.vSpace > 0 {
+			cTok.fbp = cTok.IsKeyword()
 		}
 
 		tFormatted = append(tFormatted, cTok)
