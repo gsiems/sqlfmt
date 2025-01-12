@@ -16,6 +16,22 @@ const (
 	winFuncOps
 )
 
+func opsName(i int) string {
+	var names = map[int]string{
+		compareOps: "compareOps",
+		concatOps:  "concatOps",
+		logicOps:   "logicOps",
+		mathOps:    "mathOps",
+		winFuncOps: "winFuncOps",
+	}
+
+	if tName, ok := names[i]; ok {
+		return tName
+	}
+	return ""
+
+}
+
 func calcIndent(bagType int, cTok FmtToken) int {
 
 	indents := cTok.indents
@@ -196,9 +212,10 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 	//maxDMLCaseDepth := 0
 	//dmlCaseDepth := 0
 
-	switch bagType {
-	case DMLBag:
-		for idx := 0; idx <= idxMax; idx++ {
+	for idx := 0; idx <= idxMax; idx++ {
+
+		switch bagType {
+		case DMLBag:
 			parensDepth, maxParensDepth = adjParensDepth(parensDepth, maxParensDepth, tokens[idx])
 			// Assert that no supported DB uses END for anything other than
 			// CASE statements
@@ -213,10 +230,9 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 			//		dmlCaseDepth--
 			//	}
 			//}
-		}
-	default:
-		for idx := 0; idx <= idxMax; idx++ {
+		default:
 			parensDepth, maxParensDepth = adjParensDepth(parensDepth, maxParensDepth, tokens[idx])
+
 		}
 	}
 
@@ -241,7 +257,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 
 	case PLxBody:
 		tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
-		//tokens = wrapPLxLogical(e, bagType, tokens)
+		tokens = wrapPLxLogical(e, bagType, tokens)
 	}
 	tokens = wrapInto(e, bagType, tokens)
 
@@ -254,7 +270,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 		eol := false
 		switch {
 		case idx < idxMax:
-			eol = tokens[idx].vSpace > 0
+			eol = tokens[idx+1].fbp
 		case idx == idxMax:
 			eol = true
 		}
@@ -272,7 +288,6 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 	case stIdx == idxMax:
 		ret = append(ret, tokens[stIdx])
 	}
-
 	return ret
 }
 
@@ -805,7 +820,6 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 		return tokens
 	}
 
-	//addBreaks := false
 	idxLineStart := 0
 	idxMax := len(tokens) - 1
 	idxStart := 0
@@ -816,12 +830,9 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 	pKwVal := ""
 	ppKwVal := ""
 	wrapOnLength := false
-	//pSetLen := 0
 	lSegLen := 0
-	//lMaxSegLen := 0
 	ptVal := ""
 	cCnt := 0
-	//var cIdxs []int
 	wrapOnOpenParens := false
 	debug := false
 	disableWrapping := false
@@ -851,8 +862,10 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 				if idx > 0 && parensDepth == pdl && lSegLen > e.MaxLineLength() {
 					switch tokens[idx-1].value {
 					case ",":
-						tokens[idx].EnsureVSpace()
-						tokens[idx].AdjustIndents(indents + parensDepth + 1)
+						if tokens[idx].vSpace == 0 {
+							tokens[idx].EnsureVSpace()
+							tokens[idx].AdjustIndents(indents + parensDepth + 1)
+						}
 					}
 				}
 			}
@@ -1292,7 +1305,7 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 		return tokens
 	}
 
-	addBreaks := false
+	//addBreaks := false
 	cCnt := 0
 	idxEnd := 0
 	idxLineStart := 0
@@ -1348,7 +1361,7 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 	for idx := 0; idx <= idxMax; idx++ {
 
 		cTok := tokens[idx]
-
+		doCheck := false
 		if cTok.vSpace > 0 {
 			indents = calcIndent(bagType, cTok)
 			idxLineStart = idx
@@ -1382,7 +1395,7 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 
 				// determine if concat operators were found and if the line is too long
 				if cCnt > 0 && lSegLen+pSetLen > e.MaxLineLength() {
-					addBreaks = true
+					doCheck = true
 				}
 			case "||":
 				if opType == concatOps {
@@ -1405,10 +1418,10 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 
 		//log.Printf("lSegLen: %d, indents: %d, pdl: %d, idxStart: %d, idxEnd: %d, addBreaks: %t", lSegLen, indents, pdl, idxStart, idxEnd, addBreaks)
 
-		if !addBreaks {
+		if !doCheck {
 			continue
 		}
-		addBreaks = false
+		doCheck = false
 
 		///////////////////////////////////////////
 
@@ -1440,12 +1453,11 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 					addBreak = opType == compareOps
 				}
 				if addBreak {
-					tokens[idx].EnsureVSpace()
-					tokens[idx].AdjustIndents(tpi + tpd + 1)
+					tokens[i].EnsureVSpace()
+					tokens[i].AdjustIndents(tpi + tpd + 1)
 				}
 			}
 		}
-
 	}
 	return tokens
 }
@@ -1600,7 +1612,7 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				switch logicalCnt {
 				case 0:
 					// nada
-				case 1:
+				case 1, 2, 3:
 					splitOnLogical = logicalLen > e.MaxLineLength()
 				default:
 					splitOnLogical = true
@@ -1722,6 +1734,11 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 			case parensDepth == pdl:
 				if inValues {
 					// Wrap, or not, the elements within the tuple
+
+					// TODO: If a values statement has but one tuple and that
+					// tuple has less than n elements (n TBD) then does it
+					// need to be wrapped? Wrapping one element does seem silly
+					// so n > 1...
 
 					// Check the next token to determine if there are multiple
 					// tuples involved and, if so, determine how to wrap them
