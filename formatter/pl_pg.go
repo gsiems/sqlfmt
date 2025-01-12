@@ -564,11 +564,18 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		switch ctVal {
 		case "BEGIN", "BREAK", "CALL", "CASE", "CLOSE", "CONTINUE", "DECLARE",
 			"ELSE", "ELSEIF", "ELSIF", "END", "END CASE", "END IF", "END LOOP",
-			"EXCEPTION", "EXIT", "FOR", "FOREACH", "IF", "INTO",
-			"OPEN", "RETURN", "WHILE":
+			"EXCEPTION", "EXIT", "FOREACH", "IF", "INTO", "OPEN", "RETURN",
+			"WHILE":
 
 			ensureVSpace = true
 
+		case "FOR":
+			switch pKwVal {
+			case "OPEN":
+				// nada
+			default:
+				ensureVSpace = true
+			}
 		case "EXECUTE":
 			switch ptVal {
 			case "FOR", "IN":
@@ -776,6 +783,16 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			parensDepth++
 		case ")":
 			parensDepth--
+		}
+
+		// set the line wrapping break points
+		switch {
+		case cTok.vSpace == 0:
+			// nada
+		case cTok.IsKeyword():
+			cTok.fbp = true
+		case ptVal == ";":
+			cTok.fbp = true
 		}
 
 		// Set the previous keyword value
