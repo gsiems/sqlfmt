@@ -204,9 +204,25 @@ func stashComments(e *env.Env, tokens []parser.Token) []FmtToken {
 	}
 
 	// If there are comments at the end of the input then simply append them to
-	// the final non-comment token
-	if len(lCmts) > 0 && len(ret) > 0 {
-		ret[len(ret)-1].AddTrailingComment(lCmts...)
+	// the final non-comment token. If there is no token (input is all comments)
+	// then restore them to the token list
+	if len(lCmts) > 0 {
+		if len(ret) > 0 {
+			ret[len(ret)-1].AddTrailingComment(lCmts...)
+		} else {
+			for _, ct := range lCmts {
+				nt := FmtToken{
+					categoryOf: parser.Comment,
+					typeOf:     ct.typeOf,
+					value:      ct.value,
+					vSpace:     ct.vSpace,
+					hSpace:     ct.hSpace,
+					//vSpaceOrig: cTok.VSpace(),
+					//hSpaceOrig: cTok.HSpace(),
+				}
+				ret = append(ret, nt)
+			}
+		}
 	}
 
 	return ret
