@@ -10,7 +10,7 @@ import (
 func tagPLx(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	switch e.Dialect() {
 	case dialect.PostgreSQL:
-		return tagPgPL(m, bagMap)
+		return tagPgPL(e, m, bagMap)
 	case dialect.Oracle:
 		return tagOraPL(m, bagMap)
 	}

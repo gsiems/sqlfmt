@@ -23,7 +23,7 @@ func isPgBodyBoundary(s string) bool {
 
 // tagPgPL ensures that the DDL for creating PostgreSQL functions and
 // procedures are properly tagged
-func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
+func tagPgPL(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 	// One issue with tagging PostgreSQL functions and procedures is the
 	// relationship of the body to everything around it in that many/most of
@@ -150,6 +150,20 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 					addToBody = !closeBody
 				}
 
+				// Set the body type as early as possible just in case the
+				// input doesn't result in a properly closed bag thereby
+				// disconnecting the body from the rest of the PLx definition.
+				if bodyBagId > 0 && typMap[bodyBagId] == DNFBag {
+					switch strings.ToLower(plLang) {
+					case "sql", "plpgsql":
+						typMap[bodyBagId] = PLxBody
+					default:
+						if plLang == "" && isDo {
+							typMap[bodyBagId] = PLxBody
+						}
+					}
+				}
+
 			case false:
 				// in bag, not in body
 				switch ctVal {
@@ -252,18 +266,19 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 			// tokens are properly set to match the appropriate type for the
 			// PL language
 			if bodyBagId > 0 {
-				bodyType := DNFBag
+				bodyType := typMap[bodyBagId]
 
-				switch strings.ToLower(plLang) {
-				case "sql", "plpgsql":
-					bodyType = PLxBody
-				default:
-					if plLang == "" && isDo {
+				if bodyType == DNFBag {
+					switch strings.ToLower(plLang) {
+					case "sql", "plpgsql":
 						bodyType = PLxBody
+					default:
+						if plLang == "" && isDo {
+							bodyType = PLxBody
+						}
 					}
+					typMap[bodyBagId] = bodyType
 				}
-
-				typMap[bodyBagId] = bodyType
 
 				// Check the bagType of the pointer token for the body.
 				// If the bagType differs from the bagType that corresponds to
@@ -306,9 +321,6 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		}
 	}
 
-	// TODO: If any bags are still open, then close them (for example, a body
-	// that is missing the final semi-colon)
-
 	// If the token map is not empty (PL was found and tagged) then populate
 	// the bagMap
 	for bagId, bagTokens := range tokMap {
@@ -316,6 +328,10 @@ func tagPgPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		typ := DNFBag
 		if t, ok := typMap[bagId]; ok {
 			typ = t
+		}
+
+		if typ == PLxBody {
+			bagTokens = tagDDL(e, bagTokens, bagMap)
 		}
 
 		key := bagKey(typ, bagId)
