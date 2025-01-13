@@ -1,6 +1,8 @@
 package formatter
 
 import (
+	"strings"
+
 	"github.com/gsiems/sqlfmt/env"
 	"github.com/gsiems/sqlfmt/parser"
 )
@@ -205,35 +207,37 @@ func adjustCommentIndents(bagType int, tokens *[]FmtToken) {
 			}
 		}
 
-		// If the comment is a block comment then check the first token of
+		// If the comment is a block comment then check the last line of
 		// the comment to see if the indentation/leading whitespace is zero.
 		// If it is then leave the indents at zero.
 		if (*tokens)[idx].HasLeadingComments() {
 			for j, ct := range (*tokens)[idx].ledComments {
+				ti := ledIndents
 				switch ct.typeOf {
 				case parser.BlockComment:
-					if ct.vSpace > 0 && ct.hSpace == "" {
-						// nada
-					} else {
-						(*tokens)[idx].ledComments[j].AdjustIndents(ledIndents)
+					z := strings.Split(ct.value, "\n")
+					if len(z) > 1 {
+						if z[len(z)-1] == strings.TrimLeft(z[len(z)-1], " \t") {
+							ti = 0
+						}
 					}
-				default:
-					(*tokens)[idx].ledComments[j].AdjustIndents(ledIndents)
 				}
+				(*tokens)[idx].ledComments[j].AdjustIndents(ti)
 			}
 		}
 		if (*tokens)[idx].HasTrailingComments() {
 			for j, ct := range (*tokens)[idx].trlComments {
+				ti := trlIndents
 				switch ct.typeOf {
 				case parser.BlockComment:
-					if ct.vSpace > 0 && ct.hSpace == "" {
-						// nada
-					} else {
-						(*tokens)[idx].trlComments[j].AdjustIndents(trlIndents)
+					z := strings.Split(ct.value, "\n")
+					if len(z) > 1 {
+						if z[len(z)-1] == strings.TrimLeft(z[len(z)-1], " \t") {
+							ti = 0
+						}
 					}
-				default:
-					(*tokens)[idx].trlComments[j].AdjustIndents(trlIndents)
 				}
+				(*tokens)[idx].trlComments[j].AdjustIndents(ti)
 			}
 		}
 	}
