@@ -150,7 +150,7 @@ func (t *FmtToken) AdjustHSpace(e *env.Env, pTok FmtToken) {
 	}
 
 	switch t.value {
-	case ",", "..", "[", "]":
+	case ",", "..", "[":
 		t.hSpace = ""
 		return
 	}
