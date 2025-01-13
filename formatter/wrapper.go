@@ -13,6 +13,8 @@ const (
 	concatOps
 	logicOps
 	mathOps
+	mathAddSubOps
+	mathMultDivOps
 	winFuncOps
 )
 
@@ -270,7 +272,8 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 		eol := false
 		switch {
 		case idx < idxMax:
-			eol = tokens[idx+1].fbp
+			//eol = tokens[idx+1].fbp
+			eol = tokens[idx].fbp
 		case idx == idxMax:
 			eol = true
 		}
@@ -308,21 +311,21 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 			// A work in progress...
 			// Order matters but may be/is probably context specific...
 			// Maybe consider the original vSpace for operators
-			switch pdl {
-			case 0:
+			//switch pdl {
+			//case 0:
+			//
+			//	tokens = wrapOnCommas(e, bagType, pdl, tokens)
+			//	tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
+			//	tokens = wrapOnMathOps(e, bagType, pdl, tokens)
+			//	tokens = wrapOnCompOps(e, bagType, pdl, tokens)
+			//
+			//default:
 
-				tokens = wrapOnCommas(e, bagType, pdl, tokens)
-				tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
-				tokens = wrapOnMathOps(e, bagType, pdl, tokens)
-				tokens = wrapOnCompOps(e, bagType, pdl, tokens)
-
-			default:
-
-				tokens = wrapOnMathOps(e, bagType, pdl, tokens)
-				tokens = wrapOnCompOps(e, bagType, pdl, tokens)
-				tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
-				tokens = wrapOnCommas(e, bagType, pdl, tokens)
-			}
+			tokens = wrapOnCompOps(e, bagType, pdl, tokens)
+			tokens = wrapOnMathOps(e, bagType, pdl, tokens)
+			tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
+			tokens = wrapOnCommas(e, bagType, pdl, tokens)
+			//}
 
 		}
 	}
@@ -562,7 +565,7 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 		cCnt := 0
 		idxStart := 0
 		indents := 0
-		//lSegLen := 0
+		lSegLen := 0
 		parensDepth := 0
 
 		for idx := 0; idx <= idxMax; idx++ {
@@ -580,7 +583,7 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 			if parensDepth < pdl {
 				if cTok.vSpace > 0 {
 					indents = calcIndent(bagType, cTok)
-					//lSegLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+					lSegLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 				}
 			}
 
@@ -592,7 +595,6 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 					if cCnt > 1 {
 						idxEnd := idx
 						tpd := pdl
-						lSegLen := calcLenToLineEnd(e, bagType, tokens[idxStart:idxEnd])
 						if lSegLen > e.MaxLineLength() {
 							for i := idxStart + 1; i < idxEnd; i++ {
 
@@ -836,9 +838,10 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 	wrapOnOpenParens := false
 	debug := false
 	disableWrapping := false
+	isWindowFunction := false
 
 	if debug {
-		log.Printf("%d    pdl: %d, len(tokens): %d [%s]", tokens[0].id, pdl, len(tokens), tokens[0].value)
+		log.Printf("wrapOnCommas bagType: %s, pdl: %d, len(tokens): %d", nameOf(bagType), pdl, len(tokens))
 	}
 
 	// RAISE NOTICE etc. wrap on length???
@@ -892,9 +895,6 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 
 			if parensDepth == pdl {
 				cCnt = 0
-				formatTokens = true
-				wrapOnLength = false
-				wrapOnOpenParens = false
 				idxStart = idx
 
 				if idx > 0 {
@@ -903,7 +903,23 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 					ptVal = ""
 				}
 
+				switch pKwVal {
+				case "VALUES":
+					// taken care of by wrapValueTuples
+					disableWrapping = true
+				case "INTO", "INSERT":
+					wrapOnOpenParens = true
+				case "ORDER BY", "GROUP BY", "PARTITION BY":
+					isWindowFunction = true
+				case "CALL", "ROW":
+					if e.Dialect() == dialect.PostgreSQL {
+						wrapOnOpenParens = true
+					}
+				}
+
 				switch {
+				case isWindowFunction:
+					wrapOnLength = true
 				case ppKwVal == "INSERT" && pKwVal == "INTO":
 					formatTokens = false
 				case ptVal == "JSON_BUILD_OBJECT":
@@ -914,17 +930,6 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 					wrapOnLength = true
 
 				default:
-					switch pKwVal {
-					case "VALUES":
-						// taken care of by wrapValueTuples
-						disableWrapping = true
-					case "INTO", "INSERT":
-						wrapOnOpenParens = true
-					case "CALL":
-						if e.Dialect() == dialect.PostgreSQL {
-							wrapOnOpenParens = true
-						}
-					}
 					switch bagType {
 					case DDLBag, DCLBag, CommentOnBag:
 						wrapOnLength = true
@@ -957,9 +962,10 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 				doCheck = !disableWrapping
 			case parensDepth < pdl:
 				disableWrapping = false
-				//if idxLineStart > idxStart {
-				//	idxStart = idxLineStart
-				//}
+				isWindowFunction = false
+				wrapOnOpenParens = false
+				wrapOnLength = false
+				formatTokens = true
 			}
 		}
 
@@ -967,29 +973,32 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 			idxEnd = idx
 			lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxEnd])
 			if debug {
-				log.Printf("%d        doCheck tokens[%d]: id: %d, idxLineStart: %d, idxStart: %d, idxEnd: %d, cCnt: %d [%s]", tokens[0].id, idx, tokens[idx].id, idxLineStart, idxStart, idxEnd, cCnt, tokens[idx].value)
-				log.Printf("%d        doCheck cCnt: %d, lSegLen: %d, formatTokens: %t", tokens[0].id, cCnt, lSegLen, formatTokens)
+				log.Printf("    %d        doCheck tokens[%d]: id: %d, idxLineStart: %d, idxStart: %d, idxEnd: %d, cCnt: %d [%s]", tokens[0].id, idx, tokens[idx].id, idxLineStart, idxStart, idxEnd, cCnt, tokens[idx].value)
+				log.Printf("    %d        doCheck cCnt: %d, lSegLen: %d, formatTokens: %t", tokens[0].id, cCnt, lSegLen, formatTokens)
 			}
+			addBreaks = false
 			if formatTokens && cCnt > 0 {
-				lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxEnd])
-				addBreaks = lSegLen > e.MaxLineLength()
+				lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxEnd]) + 1
+
+				//lineLen := calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+				switch {
+				case lSegLen > e.MaxLineLength():
+					addBreaks = true
+					//case lineLen > e.MaxLineLength():
+					//addBreaks = true
+				}
 			}
 
 			if debug {
-				log.Printf("%d        doCheck addBreaks: %t", tokens[0].id, addBreaks)
+				log.Printf("    %d        doCheck addBreaks: %t", tokens[0].id, addBreaks)
 			}
 		}
 
 		if addBreaks {
 
 			if wrapOnLength {
-				lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxStart])
-				cIdx := idxStart + 1
-				nextLens := make(map[int]int)
+				tpl := calcSliceLen(e, bagType, tokens[idxLineStart:idxStart+1])
 				tpd := pdl
-				var cIdxs []int
-				tplZero := len(strings.Repeat(e.Indent(), indents+pdl))
-
 				for i := idxStart + 1; i < idxEnd; i++ {
 					switch tokens[i].value {
 					case "(":
@@ -997,30 +1006,49 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 					case ")":
 						tpd--
 					default:
-						if tpd == pdl {
-							if tokens[i-1].value == "," {
-								cIdxs = append(cIdxs, cIdx)
-								nextLens[cIdx] = calcSliceLen(e, bagType, tokens[cIdx:i])
-								cIdx = i
-							}
+						if tpd != pdl {
+							continue
 						}
-					}
-				}
-				if cIdx < idxEnd {
-					cIdxs = append(cIdxs, cIdx)
-					nextLens[cIdx] = calcSliceLen(e, bagType, tokens[cIdx:idxEnd])
-				}
+						// if the previous was a comma, or was the start,
+						// then scan ahead to find the next comma where
+						// tpd == pdl (or the closing parens that drops
+						// below pdl). If the length between goes over the
+						// limit then add a vSpace to the current token.
 
-				tpl := lSegLen
-				for _, i := range cIdxs {
-					nl, ok := nextLens[i]
-					if ok {
-						if tpl+nl > e.MaxLineLength() {
-							tokens[i].EnsureVSpace()
-							tokens[i].AdjustIndents(indents + pdl)
-							tpl = tplZero
+						if i != idxStart+1 && tokens[i-1].value != "," {
+							continue
 						}
-						tpl += nl
+
+						jpd := pdl
+						jdone := false
+
+						for j := i + 1; j < idxEnd; j++ {
+							if jdone {
+								break
+							}
+							switch tokens[j].value {
+							case "(":
+								jpd++
+							case ")":
+								jpd--
+							default:
+								if jpd != pdl {
+									continue
+								}
+								if j+1 != idxEnd && tokens[j-1].value != "," {
+									continue
+								}
+								nl := calcSliceLen(e, bagType, tokens[i:j])
+
+								if tpl+nl > e.MaxLineLength() {
+									tokens[i].EnsureVSpace()
+									tokens[i].AdjustIndents(indents + pdl)
+									tpl = 0
+								}
+								jdone = true
+							}
+							tpl += calcLen(e, tokens[i]) + 1
+						}
 					}
 				}
 
@@ -1055,13 +1083,6 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 			}
 		}
 
-		//if parensDepth >= pdl {
-		//	if tokens[idx].vSpace > 0 {
-		//		indents = calcIndent(bagType, tokens[idx])
-		//		idxLineStart = idx
-		//	}
-		//}
-
 		switch tokens[idx].value {
 		case ")":
 			if parensDepth == pdl {
@@ -1075,211 +1096,7 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 			ppKwVal = pKwVal
 			pKwVal = tokens[idx].AsUpper()
 		}
-
 	}
-
-	///////////////////////////////////////
-	/*
-		for idx := 0; idx <= idxMax; idx++ {
-
-
-			cTok := tokens[idx]
-
-			if cTok.value == "(" {
-				parensDepth++
-
-				if parensDepth == pdl {
-					formatTokens = true
-					wrapOnLength = false
-					cCnt = 0
-					if idx > 0 {
-						ptVal = tokens[idx-1].AsUpper()
-					} else {
-						ptVal = ""
-					}
-
-					switch {
-					case ppKwVal == "INSERT" && pKwVal == "INTO":
-						formatTokens = false
-					case ptVal == "JSON_BUILD_OBJECT":
-						formatTokens = false
-					case ptVal == "IN":
-						wrapOnLength = true
-					default:
-						switch bagType {
-						case DDLBag, DCLBag, CommentOnBag:
-							wrapOnLength = true
-						}
-					}
-				}
-			}
-
-			if cTok.vSpace > 0 {
-				idxLineStart = idx
-
-				if parensDepth < pdl {
-					indents = calcIndent(bagType, cTok)
-					idxLineStart = idx
-					lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idx])
-				}
-
-				if parensDepth == pdl {
-
-					if idx > idxLineStart {
-						lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idx])
-						if lSegLen > lMaxSegLen {
-							lMaxSegLen = lSegLen
-						}
-						idxLineStart = idx
-					}
-				}
-
-			}
-
-			if parensDepth == pdl {
-
-				if formatTokens {
-
-					switch cTok.value {
-					case "(":
-						idxStart = idx
-						if idxStart > idxLineStart {
-							lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxStart])
-							if lSegLen > lMaxSegLen {
-								lMaxSegLen = lSegLen
-							}
-						} else {
-							lSegLen = 0
-						}
-
-					case ")":
-						idxEnd = idx
-						if idxEnd > idxStart {
-							pSetLen = calcSliceLen(e, bagType, tokens[idxStart:idxEnd])
-						} else {
-							pSetLen = 0
-						}
-
-						// determine if commas were found and if the line is too long
-						if cCnt > 0 && lMaxSegLen+pSetLen > e.MaxLineLength() {
-							addBreaks = true
-						}
-
-						//log.Printf("formatTokens: %t, wrapOnLength: %t, addBreaks: %t", formatTokens, wrapOnLength, addBreaks)
-
-					case ",":
-						cCnt++
-					case "=>":
-						formatTokens = false
-					}
-				}
-			}
-
-			if cTok.value == ")" {
-				parensDepth--
-			}
-
-			if cTok.IsKeyword() && pKwVal != "AS" {
-				ppKwVal = pKwVal
-				pKwVal = cTok.AsUpper()
-			}
-
-			if !addBreaks {
-				continue
-			}
-			addBreaks = false
-
-			///////////////////////////////////////////
-
-			if wrapOnLength {
-				cIdx := idxStart
-				nextLens := make(map[int]int)
-				tpd := pdl
-
-				for i := idxStart + 1; i < idxEnd; i++ {
-
-					switch tokens[i].value {
-					case "(":
-						tpd++
-					case ")":
-						tpd--
-					default:
-						if tpd == pdl && i > 0 {
-							if tokens[i-1].value == "," {
-								nextLens[cIdx] = calcSliceLen(e, bagType, tokens[cIdx:i])
-								cIdx = i
-							}
-						}
-					}
-				}
-				if cIdx < idxEnd {
-					nextLens[cIdx] = calcSliceLen(e, bagType, tokens[cIdx:idxEnd])
-				}
-
-				tpl := lSegLen
-				tpi := indents
-				for i := idxStart; i < idxEnd; i++ {
-
-					if tokens[i].vSpace > 0 {
-						tpi = calcIndent(bagType, tokens[i])
-						tpl = 0
-					}
-
-					nl, ok := nextLens[i]
-					if ok {
-
-						if tpl+nl > e.MaxLineLength() {
-
-							//log.Printf("lSegLen: %d, indents: %d, pdl: %d, tpi: %d, tpl: %d, nextLen: %d", lSegLen, indents, pdl, tpi, tpl, nl)
-							//log.Printf("     [%s] -- [%s]", tokens[], tokens[], tokens[])
-
-							tokens[i].EnsureVSpace()
-							tokens[i].AdjustIndents(tpi + pdl)
-							tpl = len(strings.Repeat(e.Indent(), tokens[i].indents))
-						}
-
-						tpl += nl
-					}
-				}
-				continue
-			}
-
-			///////////////////////////////////////////
-
-			//log.Printf("lSegLen: %d, indents: %d, pdl: %d, idxStart: %d, idxEnd: %d", lSegLen, indents, pdl, idxStart, idxEnd)
-
-			tpi := indents
-			tpd := pdl
-			for i := idxStart + 1; i < idxEnd; i++ {
-
-				if tokens[i].vSpace > 0 {
-					tpi = calcIndent(bagType, tokens[i])
-				}
-
-				switch tokens[i].value {
-				case "(":
-					tpd++
-				case ")":
-					tpd--
-				}
-
-				if tpd == pdl {
-					switch tokens[i-1].value {
-					case ",", "(":
-						//case ",":
-						tokens[i].EnsureVSpace()
-						tokens[i].AdjustIndents(tpi + tpd)
-					default:
-						if tokens[i].vSpace > 0 {
-							tokens[i].AdjustIndents(tpi + tpd)
-						}
-					}
-				}
-
-			}
-
-		}
-	*/
 	return tokens
 }
 
@@ -1295,7 +1112,8 @@ func wrapOnConcatOps(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken
 
 func wrapOnMathOps(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 	//log.Print("wrapOnMathOps")
-	return wrapOnOps(e, bagType, mathOps, pdl, tokens)
+	tokens = wrapOnOps(e, bagType, mathAddSubOps, pdl, tokens)
+	return wrapOnOps(e, bagType, mathMultDivOps, pdl, tokens)
 }
 
 func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtToken {
@@ -1314,7 +1132,7 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 	lSegLen := 0
 	parensDepth := 0
 	pSetLen := 0
-
+	lineLen := 0
 	idxMax := len(tokens) - 1
 
 	if pdl == 0 {
@@ -1341,8 +1159,10 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 				switch tokens[idx].value {
 				case "||":
 					addBreak = opType == concatOps
-				case "+", "-", "*", "/":
-					addBreak = opType == mathOps
+				case "+", "-":
+					addBreak = opType == mathAddSubOps
+				case "*", "/":
+					addBreak = opType == mathMultDivOps
 				case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
 					addBreak = opType == compareOps
 				}
@@ -1362,9 +1182,18 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 
 		cTok := tokens[idx]
 		doCheck := false
-		if cTok.vSpace > 0 {
-			indents = calcIndent(bagType, cTok)
-			idxLineStart = idx
+		//if cTok.vSpace > 0 {
+		//	indents = calcIndent(bagType, cTok)
+		//	idxLineStart = idx
+		//}
+
+		if parensDepth < pdl {
+			if tokens[idx].vSpace > 0 {
+				indents = calcIndent(bagType, cTok)
+
+				lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+				idxLineStart = idx
+			}
 		}
 
 		if cTok.value == "(" {
@@ -1397,12 +1226,20 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 				if cCnt > 0 && lSegLen+pSetLen > e.MaxLineLength() {
 					doCheck = true
 				}
+				if cCnt > 0 && lineLen > e.MaxLineLength() {
+					doCheck = true
+				}
+
 			case "||":
 				if opType == concatOps {
 					cCnt++
 				}
-			case "+", "-", "*", "/":
-				if opType == mathOps {
+			case "+", "-":
+				if opType == mathAddSubOps {
+					cCnt++
+				}
+			case "*", "/":
+				if opType == mathMultDivOps {
 					cCnt++
 				}
 			case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
@@ -1447,8 +1284,10 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 				switch tokens[i].value {
 				case "||":
 					addBreak = opType == concatOps
-				case "+", "-", "*", "/":
-					addBreak = opType == mathOps
+				case "+", "-":
+					addBreak = opType == mathAddSubOps
+				case "*", "/":
+					addBreak = opType == mathMultDivOps
 				case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
 					addBreak = opType == compareOps
 				}
@@ -1570,6 +1409,7 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	logicalIndents := 0
 	logicalStart := 0
 	pKwVal := ""
+	lineLen := 0
 
 	idxMax := len(tokens) - 1
 	//log.Printf("wrapPLxLogical  [%s] [%s]", tokens[0].value, tokens[idxMax].value)
@@ -1578,6 +1418,7 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 		if tokens[idx].vSpace > 0 {
 			indents = tokens[idx].indents
+			lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 		}
 
 		switch tokens[idx].AsUpper() {
@@ -1590,7 +1431,7 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 		case "THEN":
 			if inLogical {
 				logicalCnt := 0
-				logicalLen := calcSliceLen(e, bagType, tokens[logicalStart:idx])
+				//logicalLen := calcSliceLen(e, bagType, tokens[logicalStart:idx])
 				pkv := pKwVal
 
 				for i := logicalStart; i <= idx; i++ {
@@ -1613,7 +1454,8 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				case 0:
 					// nada
 				case 1, 2, 3:
-					splitOnLogical = logicalLen > e.MaxLineLength()
+					//splitOnLogical = logicalLen > e.MaxLineLength()
+					splitOnLogical = lineLen > e.MaxLineLength()
 				default:
 					splitOnLogical = true
 				}
