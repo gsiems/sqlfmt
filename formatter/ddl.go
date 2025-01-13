@@ -76,9 +76,13 @@ func tagDDLV0(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 		case false:
 			// Consider the previous token data to determine if a bag could be opened
-			switch pTok.value {
+
+			switch pTok.AsUpper() {
 			case "", ";":
 				canOpenBag = true
+			case "THEN", "LOOP":
+				// THEN and LOOP to catch DDL embedded within PL code
+				canOpenBag = e.Dialect() == dialect.PostgreSQL
 			case "/":
 				canOpenBag = e.Dialect() == dialect.Oracle
 			default:
