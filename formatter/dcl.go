@@ -1,6 +1,9 @@
 package formatter
 
-import "github.com/gsiems/sqlfmt/env"
+import (
+	"github.com/gsiems/sqlfmt/dialect"
+	"github.com/gsiems/sqlfmt/env"
+)
 
 // tagDCL ensures that permissions setting commands are properly tagged
 func tagDCL(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
@@ -82,6 +85,17 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		// current token
 		cTok := tokens[idx]
 
+		if parensDepth > 0 {
+			switch cTok.AsUpper() {
+			case "IN", "INOUT", "OUT":
+				switch e.Dialect() {
+				case dialect.PostgreSQL:
+					// not needed for granting/revoking permissions
+					continue
+				}
+			}
+		}
+
 		////////////////////////////////////////////////////////////////
 		// Determine the preceding vertical spacing (if any)
 		honorVSpace := idx == 0
@@ -135,7 +149,7 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 	wt := wrapOnCommas(e, DCLBag, 1, tFormatted)
 
-adjustCommentIndents (bagType, &wt)
+	adjustCommentIndents(bagType, &wt)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)
