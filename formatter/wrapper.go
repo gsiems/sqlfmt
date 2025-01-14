@@ -1,6 +1,7 @@
 package formatter
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -259,6 +260,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 
 	case PLxBody:
 		tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
+		tokens = wrapPLxCase(e, bagType, tokens)
 		tokens = wrapPLxLogical(e, bagType, tokens)
 	}
 	tokens = wrapInto(e, bagType, tokens)
@@ -297,7 +299,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 // wrapLine takes "one lines worth" of tokens and attempts to add line breaks
 // as needed
 func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
-
+	//return tokens
 	if len(tokens) == 0 {
 		return tokens
 	}
@@ -1396,6 +1398,295 @@ func wrapPLxCalls(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 
 			if cTok.value == ")" {
 				parensDepth--
+			}
+		}
+	}
+	return tokens
+}
+
+func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
+
+	//log.Print("wrapPLxCase")
+
+	if len(tokens) == 0 {
+		return tokens
+	}
+
+	// The difference between in-lined case structures and "regular" case
+	// structures is that the in-lined ones will not have any semi-colons
+	// between the "CASE" and the "END" tokens
+
+	// For in-lined we wrap similar to DML casing, otherwise we wrap similar to
+	// IF ... THEN ... END IF structures.
+
+	caseDepth := 0
+	cdMax := 0
+	idxMax := len(tokens) - 1
+
+	// determine the max case depth
+	for idx := 0; idx <= idxMax; idx++ {
+		switch tokens[idx].AsUpper() {
+		case "CASE":
+			caseDepth++
+			cdMax = max(cdMax, caseDepth)
+		case "END":
+			// in-line case statement
+			caseDepth--
+		case "CASE END":
+			// case structure
+			caseDepth--
+		}
+	}
+
+	if cdMax == 0 {
+		return tokens
+	}
+
+	for cdl := 1; cdl <= cdMax; cdl++ {
+
+		caseDepth := 0
+		caseIdxs := make(map[int]string)
+		doCheck := false
+		idxEnd := 0
+		idxStart := 0
+		ifCnt := 0
+		//inCase := false
+		indents := 0
+		lineLen := 0
+		logicalCnt := 0
+		parensDepth := 0
+		pKwVal := ""
+		scCnt := 0
+		idxLineStart := 0
+		//log.Printf("    cdl: %d", cdl)
+
+		for idx := 0; idx <= idxMax; idx++ {
+
+			if caseDepth < cdl {
+				if tokens[idx].vSpace > 0 {
+					if tokens[idx].AsUpper() == "CASE" {
+						indents = tokens[idx].indents
+					} else {
+						indents = calcIndent(bagType, tokens[idx])
+					}
+					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+					idxLineStart = idx
+				}
+			}
+
+			cTok := tokens[idx]
+			ctVal := cTok.AsUpper()
+
+			//log.Printf("        caseDepth: %d", caseDepth)
+
+			switch ctVal {
+			case "CASE":
+				caseDepth++
+				if caseDepth == cdl {
+					caseIdxs[idx] = ctVal
+					idxEnd = 0
+					idxStart = idx
+					ifCnt = 0
+					scCnt = 0
+					//inCase = true
+				}
+			}
+
+			//log.Printf("        inCase: %t, indents: %d, %s", inCase, indents, cTok.String())
+
+			if caseDepth == cdl {
+				switch ctVal {
+				case "(":
+					parensDepth++
+				case ")":
+					parensDepth--
+				case "IF":
+					ifCnt++
+				case "END IF":
+					ifCnt--
+				}
+
+				logicalCnt = adjLogicalCnt(logicalCnt, pKwVal, cTok)
+
+				if ifCnt == 0 {
+					switch ctVal {
+					case "IF":
+						ifCnt++
+					case "END IF":
+						ifCnt--
+					case ";":
+						scCnt++
+					case "WHEN", "THEN", "ELSE":
+						caseIdxs[idx] = ctVal
+					}
+				}
+			}
+
+			switch ctVal {
+			case "END", "END CASE":
+				if caseDepth == cdl {
+					caseIdxs[idx] = ctVal
+					doCheck = true
+					idxEnd = idx
+					//inCase = false
+				}
+				caseDepth--
+			}
+
+			if cTok.IsKeyword() {
+				pKwVal = ctVal
+			}
+
+			if !doCheck {
+				continue
+			}
+			doCheck = false
+
+			var ary []string
+			for i := idxStart; i <= idxEnd; i++ {
+				if _, ok := caseIdxs[i]; ok {
+					ary = append(ary, fmt.Sprintf("%d", tokens[i].id))
+				}
+			}
+
+			if scCnt == 0 {
+				////////////////////////////////////////////////////////
+				// in-line case statement
+
+				// If the length is too long, or there are to many WHENs or
+				// too many logicals then wrap things.
+				// If there are any nested bags then wrap things
+				cc := 0
+				bc := 0
+				tokens[idxStart].AdjustVSpace(false, false)
+				tokens[idxEnd].AdjustVSpace(false, false)
+
+				for i := idxStart + 1; i < idxEnd; i++ {
+					if _, ok := caseIdxs[i]; ok {
+						cc++
+					}
+					if tokens[i].IsBag() {
+						bc++
+					}
+				}
+
+				addWraps := false
+				wrapCase := false
+				switch {
+				case lineLen > e.MaxLineLength():
+					addWraps = true
+					lte := calcLenToLineEnd(e, bagType, tokens[idxStart:])
+
+					switch {
+					case lte <= e.MaxLineLength():
+						// nada
+					case idxStart == 0:
+						wrapCase = true
+					case tokens[idxStart-1].value == "=>":
+						// nada
+					default:
+						wrapCase = true
+					}
+
+				case bc > 0:
+					addWraps = true
+				case cc > 3:
+					addWraps = true
+				case logicalCnt > 2:
+					addWraps = true
+				}
+
+				if !addWraps {
+					idxStart = 0
+					idxEnd = 0
+					continue
+				}
+
+				tpd := parensDepth
+				tkw := ""
+
+				tpi := indents
+				if idxLineStart != idxStart {
+					tpi++
+				}
+
+				if wrapCase {
+					tokens[idxStart].EnsureVSpace()
+					tokens[idxStart].AdjustIndents(tpi)
+					tpi = calcIndent(bagType, tokens[idxStart])
+				}
+
+				tokens[idxEnd].EnsureVSpace()
+				tokens[idxEnd].AdjustIndents(tpi)
+
+				for i := idxStart + 1; i < idxEnd; i++ {
+					switch tokens[i].AsUpper() {
+					case "(":
+						tpd++
+					case ")":
+						tpd--
+
+					case "WHEN", "ELSE":
+						if _, ok := caseIdxs[i]; ok {
+							tokens[i].EnsureVSpace()
+							tokens[i].AdjustIndents(tpi + 1)
+						}
+					default:
+						switch tokens[i-1].AsUpper() {
+						case "THEN", "ELSE":
+							if _, ok := caseIdxs[i-1]; ok {
+								tokens[i].EnsureVSpace()
+								tokens[i].AdjustIndents(tpi + 2)
+							}
+						default:
+							if tokens[i].vSpace > 0 {
+								tokens[i].AdjustIndents(tokens[i].indents + 2)
+							}
+							if isLogical(tkw, tokens[i]) {
+								tokens[idxStart].EnsureVSpace()
+								tokens[idxStart].AdjustIndents(tpi + tpd)
+							}
+						}
+					}
+
+					if tokens[i].IsKeyword() {
+						tkw = tokens[i].AsUpper()
+					}
+				}
+				idxStart = 0
+				idxEnd = 0
+
+			} else {
+				////////////////////////////////////////////////////////
+				// case block
+				tokens[idxStart].EnsureVSpace()
+				tokens[idxStart].AdjustIndents(indents)
+				tokens[idxEnd].EnsureVSpace()
+				tokens[idxEnd].AdjustIndents(indents)
+
+				for i := idxStart + 1; i < idxEnd; i++ {
+					switch tokens[i].AsUpper() {
+					case "WHEN", "ELSE":
+						if _, ok := caseIdxs[i]; ok {
+							tokens[i].EnsureVSpace()
+							tokens[i].AdjustIndents(indents + 1)
+						}
+					default:
+						switch tokens[i-1].AsUpper() {
+						case "THEN", "ELSE":
+							if _, ok := caseIdxs[i-1]; ok {
+								tokens[i].EnsureVSpace()
+								tokens[i].AdjustIndents(indents + 2)
+							}
+						default:
+							if tokens[i].vSpace > 0 {
+								tokens[i].AdjustIndents(tokens[i].indents + 2)
+							}
+						}
+					}
+				}
+				idxStart = 0
+				idxEnd = 0
 			}
 		}
 	}

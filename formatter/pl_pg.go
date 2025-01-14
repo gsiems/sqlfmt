@@ -578,13 +578,29 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 
 		// Determine if a new-line should be applied before specific tokens
 		switch ctVal {
-		case "BEGIN", "BREAK", "CALL", "CASE", "CLOSE", "CONTINUE", "DECLARE",
-			"ELSE", "ELSEIF", "ELSIF", "END", "END CASE", "END IF", "END LOOP",
+		case "BEGIN", "BREAK", "CALL", "CLOSE", "CONTINUE", "DECLARE",
+			"ELSEIF", "ELSIF", "END CASE", "END IF", "END LOOP",
 			"EXCEPTION", "EXIT", "FOREACH", "IF", "INTO", "OPEN", "RETURN",
 			"WHILE":
 
 			ensureVSpace = true
 
+		case "CASE":
+			switch ptVal {
+			case ";", "LOOP":
+				ensureVSpace = true
+			}
+		case "ELSE":
+			if bbStack.Last() == "IF" {
+				ensureVSpace = true
+			}
+		case "END":
+			switch ntVal {
+			case ",", ")":
+				// nada
+			default:
+				ensureVSpace = true
+			}
 		case "FOR":
 			switch pKwVal {
 			case "OPEN":
@@ -599,11 +615,10 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			default:
 				ensureVSpace = true
 			}
-
 		case "WHEN":
-			if bbStack.Last() == "CASE" {
-				ensureVSpace = true
-			}
+			//if bbStack.Last() == "CASE" {
+			//	ensureVSpace = true
+			//}
 			if bbStack.LastBlock() == "EXCEPTION" {
 				ensureVSpace = true
 			}
@@ -629,8 +644,17 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		default:
 
 			switch ptVal {
-			case ";", "ELSE":
+			case ";":
 				ensureVSpace = true
+			case "ELSE":
+				//ensureVSpace = true
+
+				//if bbStack.Last() == "CASE" {
+				//	ensureVSpace = true
+				//}
+				if bbStack.Last() == "IF" {
+					ensureVSpace = true
+				}
 
 			case "LOOP":
 				if ctVal != ";" {
@@ -666,8 +690,8 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 				switch {
 				case bbStack.Last() == "IF":
 					ensureVSpace = true
-				case bbStack.Last() == "CASE":
-					ensureVSpace = true
+				//case bbStack.Last() == "CASE":
+				//	ensureVSpace = true
 				case bbStack.LastBlock() == "EXCEPTION":
 					ensureVSpace = true
 				}
@@ -819,12 +843,12 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	wt := wrapLines(e, PLxBody, tFormatted)
+	tFormatted = wrapLines(e, PLxBody, tFormatted)
 
-	adjustCommentIndents(bagType, &wt)
+	adjustCommentIndents(bagType, &tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
 }
 
 func formatPgPLNonBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIndents int, forceInitVSpace bool) {
