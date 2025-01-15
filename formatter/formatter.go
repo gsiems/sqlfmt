@@ -357,6 +357,18 @@ func consolidateDatatypes(e *env.Env, tokens []FmtToken) []FmtToken {
 			}
 		}
 
+		if dtLen == 0 {
+			for i := 1; i < idxLen; i++ {
+				if tokens[idx+i].value != "%" {
+					continue
+				}
+				switch tokens[idx+2].AsUpper() {
+				case "ROW", "ROWTYPE":
+					dtLen = 3
+				}
+			}
+		}
+
 		if dtLen > 1 {
 			dts := asDatatypeString(tokens[idx : idx+dtLen])
 			cTok.value = dts
@@ -385,11 +397,11 @@ func asDatatypeString(s []FmtToken) string {
 		switch v {
 		case "(":
 			z = append(z, " "+v)
-		case ")", ",", "[", "]":
+		case ")", ",", "[", "]", "%":
 			z = append(z, v)
 		default:
 			switch pv {
-			case "(", ",", "":
+			case "(", ",", "%", "":
 				z = append(z, v)
 			default:
 				z = append(z, " "+v)
