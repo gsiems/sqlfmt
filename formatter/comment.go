@@ -30,6 +30,7 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 
 	idxMax := len(b.tokens) - 1
 	parensDepth := 0
+	hasParens := false
 
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
@@ -41,7 +42,6 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 
 		////////////////////////////////////////////////////////////////
 		// Update keyword capitalization as needed
-		// Identifiers should have been properly cased in cleanupParsed
 		switch parensDepth {
 		case 0:
 			if cTok.IsKeyword() && !cTok.IsDatatype() {
@@ -84,6 +84,7 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 		// Adjust the parens depth
 		switch cTok.value {
 		case "(":
+			hasParens = true
 			parensDepth++
 		case ")":
 			parensDepth--
@@ -93,6 +94,10 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 		pTok = cTok
 
 		tFormatted = append(tFormatted, cTok)
+	}
+
+	if hasParens {
+		tFormatted = wrapOnCommas(e, bagType, 1, tFormatted)
 	}
 
 	adjustCommentIndents(bagType, &tFormatted)
@@ -184,9 +189,11 @@ func adjustCommentIndents(bagType int, tokens *[]FmtToken) {
 
 			switch (*tokens)[idx].value {
 			case ")":
-				if idx > 0 {
-					ledIndents = (*tokens)[idx-1].indents
-				}
+				//if idx > 0 {
+					//ledIndents = (*tokens)[idx-1].indents
+					ledIndents++
+					trlIndents--
+				//}
 			default:
 				switch bagType {
 				case CommentOnBag:
@@ -200,7 +207,7 @@ func adjustCommentIndents(bagType int, tokens *[]FmtToken) {
 					switch (*tokens)[idx].AsUpper() {
 					case "END IF", "END CASE", "END LOOP", "END":
 						ledIndents++
-					case "EXCEPTION":
+					case "EXCEPTION", "BEGIN":
 						ledIndents++
 					}
 				}
