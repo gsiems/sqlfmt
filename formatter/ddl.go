@@ -342,6 +342,7 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 
 	ddlAction := ""
 	objType := ddlObjType(e, tokens)
+	isAlterOwner := false
 
 	var tFormatted []FmtToken
 	var pTok FmtToken // The previous token
@@ -366,6 +367,10 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		// TODO
 
 		switch ctVal {
+		case "OWNER":
+			if ddlAction == "ALTER" {
+				isAlterOwner = true
+			}
 		case "AS":
 
 			switch objType {
@@ -465,8 +470,33 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	//wt := validateWhitespacing(e, DDLBag, tFormatted)
-	adjustCommentIndents (bagType, &tFormatted)
+	if isAlterOwner {
+		parensDepth = 0
+		pTok = FmtToken{}
+		for i := 1; i < len(tFormatted); i++ {
+
+			switch tFormatted[i].value {
+			case "(":
+				parensDepth++
+			case ")":
+				parensDepth--
+			default:
+				switch {
+				case tFormatted[i].HasLeadingComments(), pTok.HasTrailingComments():
+					// nada
+				default:
+					if tFormatted[i].vSpace > 0 {
+						tFormatted[i].AdjustVSpace(false, false)
+						tFormatted[i].AdjustHSpace(e, pTok)
+					}
+				}
+			}
+			pTok = tFormatted[i]
+		}
+		tFormatted = wrapOnCommas(e, DDLBag, 1, tFormatted)
+	}
+
+	adjustCommentIndents(bagType, &tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
 	UpsertMappedBag(bagMap, b.typeOf, b.id, b.forObj, tFormatted)
