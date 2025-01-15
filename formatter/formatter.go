@@ -372,6 +372,8 @@ func consolidateDatatypes(e *env.Env, tokens []FmtToken) []FmtToken {
 		if dtLen > 1 {
 			dts := asDatatypeString(tokens[idx : idx+dtLen])
 			cTok.value = dts
+			cTok.categoryOf = parser.Datatype
+			cTok.typeOf = parser.Datatype
 			idx += dtLen - 1
 		}
 		ret = append(ret, cTok)
