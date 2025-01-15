@@ -195,7 +195,11 @@ func stashComments(e *env.Env, tokens []parser.Token) []FmtToken {
 			}
 
 			if len(lCmts) > 0 {
+if nt.value == ")" {
+	ret[len(ret)-1].AddTrailingComment(lCmts...)
+} else {
 				nt.AddLeadingComment(lCmts...)
+}
 				lCmts = nil
 			}
 			ret = append(ret, nt)
