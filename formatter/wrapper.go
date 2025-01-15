@@ -40,6 +40,21 @@ func calcIndent(bagType int, cTok FmtToken) int {
 	indents := cTok.indents
 
 	switch bagType {
+	case CommentOnBag:
+		switch cTok.AsUpper() {
+		case "COMMENT":
+			indents++
+		}
+	case DCLBag:
+		switch cTok.AsUpper() {
+		case "GRANT", "REVOKE":
+			indents++
+		}
+	case DDLBag:
+		switch cTok.AsUpper() {
+		case "ALTER":
+			indents++
+		}
 	case DMLBag:
 		switch cTok.AsUpper() {
 		case "SELECT", "INSERT":
@@ -781,21 +796,6 @@ func wrapInto(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 
 	/*
-
-	   func calcSliceLen(e *env.Env, bagType int, tokens []FmtToken) int {
-
-	   	sliceLen := 0
-	   	for _, cTok := range tokens {
-	   		sliceLen += calcLen(e, cTok)
-	   	}
-	   	return sliceLen
-	   }
-
-	   func calcLenToLineEnd(e *env.Env, bagType int, tokens []FmtToken) int {
-
-
-	*/
-	/*
 	   LINE       => the set of tokens passed into the wrap function
 	   line       => a set of tokens bounded by vSpaces or LINE boundaries
 	   parens set => a pair of matching open/close parens and the tokens contained therein
@@ -849,13 +849,13 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 	// RAISE NOTICE etc. wrap on length???
 
 	if pdl == 0 {
-		lSegLen = calcLenToLineEnd(e, bagType, tokens)
+		lineLen := calcLenToLineEnd(e, bagType, tokens)
 
 		for idx := 0; idx <= idxMax; idx++ {
 
 			if tokens[idx].vSpace > 0 {
 				indents = calcIndent(bagType, tokens[idx])
-				lSegLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+				lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 			}
 
 			switch tokens[idx].value {
@@ -864,12 +864,13 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 			case ")":
 				parensDepth--
 			default:
-				if idx > 0 && parensDepth == pdl && lSegLen > e.MaxLineLength() {
+				if idx > 0 && parensDepth == pdl && lineLen > e.MaxLineLength() {
 					switch tokens[idx-1].value {
 					case ",":
 						if tokens[idx].vSpace == 0 {
 							tokens[idx].EnsureVSpace()
 							tokens[idx].AdjustIndents(indents + parensDepth + 1)
+							lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 						}
 					}
 				}
@@ -913,7 +914,7 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 					wrapOnOpenParens = true
 				case "ORDER BY", "GROUP BY", "PARTITION BY":
 					isWindowFunction = true
-				case "CALL", "ROW":
+				case "CALL", "PERFORM", "ROW":
 					if e.Dialect() == dialect.PostgreSQL {
 						wrapOnOpenParens = true
 					}
@@ -936,6 +937,9 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 					case DDLBag, DCLBag, CommentOnBag:
 						wrapOnLength = true
 					}
+				}
+				if wrapOnLength {
+					wrapOnOpenParens = true
 				}
 			}
 		}
@@ -1031,6 +1035,12 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 							switch tokens[j].value {
 							case "(":
 								jpd++
+
+								if jpd == pdl && wrapOnOpenParens {
+									tokens[i].EnsureVSpace()
+									tokens[i].AdjustIndents(indents + pdl)
+								}
+
 							case ")":
 								jpd--
 							default:
@@ -1051,6 +1061,39 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 							}
 							tpl += calcLen(e, tokens[i]) + 1
 						}
+					}
+				}
+
+				// determine if it is necessary to wrap the closing parens
+				wrapOnCloseParens := false
+				switch bagType {
+				case CommentOnBag, DCLBag:
+					wrapOnCloseParens = true
+				case DDLBag:
+					isAlter := tokens[0].AsUpper() == "ALTER"
+
+					isOwner := false
+					for _, ct := range tokens {
+						switch ct.AsUpper() {
+						case "OWNER":
+							isOwner = true
+						}
+					}
+					wrapOnCloseParens = isAlter && isOwner
+
+				}
+				if wrapOnCloseParens {
+					tls := 0
+					for i, ct := range tokens {
+						if ct.vSpace > 0 {
+							tls = i
+						}
+					}
+
+					ll := calcLenToLineEnd(e, bagType, tokens[tls:])
+					if ll > e.MaxLineLength() {
+						tokens[idxEnd].EnsureVSpace()
+						tokens[idxEnd].AdjustIndents(indents + pdl - 1)
 					}
 				}
 
@@ -1094,9 +1137,17 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 			parensDepth--
 		}
 
-		if tokens[idx].IsKeyword() && pKwVal != "AS" {
-			ppKwVal = pKwVal
-			pKwVal = tokens[idx].AsUpper()
+		if pKwVal != "AS" {
+			switch {
+			case tokens[idx].IsKeyword():
+				ppKwVal = pKwVal
+				pKwVal = tokens[idx].AsUpper()
+			case tokens[idx].AsUpper() == "PERFORM":
+				if e.Dialect() == dialect.PostgreSQL {
+					ppKwVal = pKwVal
+					pKwVal = tokens[idx].AsUpper()
+				}
+			}
 		}
 	}
 	return tokens
@@ -1558,8 +1609,10 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				// If there are any nested bags then wrap things
 				cc := 0
 				bc := 0
-				tokens[idxStart].AdjustVSpace(false, false)
-				tokens[idxEnd].AdjustVSpace(false, false)
+				tokens[idxStart].vSpace = 0
+				tokens[idxStart].hSpace = " "
+				tokens[idxEnd].vSpace = 0
+				tokens[idxEnd].hSpace = " "
 
 				for i := idxStart + 1; i < idxEnd; i++ {
 					if _, ok := caseIdxs[i]; ok {
