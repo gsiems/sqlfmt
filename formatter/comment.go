@@ -205,7 +205,7 @@ func adjustCommentIndents(bagType int, tokens *[]FmtToken) {
 					}
 				case PLxBody:
 					switch (*tokens)[idx].AsUpper() {
-					case "END IF", "END CASE", "END LOOP", "END":
+					case "ELSE", "END IF", "END CASE", "END LOOP", "END":
 						ledIndents++
 					case "EXCEPTION", "BEGIN":
 						ledIndents++
