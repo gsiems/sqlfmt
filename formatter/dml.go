@@ -446,9 +446,9 @@ func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 			"PARTITION BY", "RECURSIVE", "REFRESH", "REINDEX", "RESTART",
 			"RETURNING", "RIGHT", "ROW", "ROWS", "SELECT", "SET", "SHARE",
 			"SOURCE", "SYSTEM", "TABLE", "TARGET", "TEMP", "TEMPORARY", "THEN",
-			"TRUNCATE", "UNION", "UNLOGGED", "UPDATE", "UPSERT", "USING",
-			"VALUE", "VALUES", "VIEW", "WHEN", "WHERE", "WINDOW", "WITH",
-			"WITHIN", "GROUP BY":
+			"TRUNCATE", "UNION", "UNIQUE", "UNLOGGED", "UPDATE", "UPSERT",
+			"USING", "VALUE", "VALUES", "VIEW", "WHEN", "WHERE", "WINDOW",
+			"WITH", "WITHIN", "GROUP BY":
 
 			if cTok.IsKeyword() {
 				cTok.SetUpper()
@@ -465,6 +465,11 @@ func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		case dialect.SQLite:
 			switch ctVal {
 			case "REPLACE":
+				cTok.SetUpper()
+			}
+		case dialect.Oracle:
+			switch ctVal {
+			case "CONNECT", "LEVEL":
 				cTok.SetUpper()
 			}
 		}
