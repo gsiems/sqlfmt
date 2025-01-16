@@ -1746,115 +1746,106 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	return tokens
 }
 
+func splitPLxLogical(e *env.Env, bagType, indents, lineLen, idxStart, idxEnd int, tokens *[]FmtToken) {
+
+	ipd := 0
+	lCnt := 0
+	pKwVal := ""
+
+	for idx := idxStart; idx <= idxEnd; idx++ {
+		switch (*tokens)[idx].AsUpper() {
+		case "AND", "OR":
+			lCnt = adjLogicalCnt(lCnt, pKwVal, (*tokens)[idx])
+		}
+		if (*tokens)[idx].IsKeyword() {
+			pKwVal = (*tokens)[idx].AsUpper()
+		}
+	}
+
+	switch lCnt {
+	case 0:
+		return
+	case 1, 2, 3:
+		if lineLen <= e.MaxLineLength() {
+			return
+		}
+	}
+
+	pKwVal = ""
+	for idx := idxStart; idx <= idxEnd; idx++ {
+
+		switch (*tokens)[idx].AsUpper() {
+		case "(":
+			ipd++
+		case ")":
+			ipd--
+			if (*tokens)[idx].vSpace > 0 {
+				(*tokens)[idx].AdjustIndents(ipd - 1)
+			}
+		case "AND", "OR":
+			if isLogical(pKwVal, (*tokens)[idx]) {
+				(*tokens)[idx].EnsureVSpace()
+				(*tokens)[idx].AdjustIndents(indents + ipd + 1)
+			}
+		default:
+			if idx > idxStart {
+				if (*tokens)[idx].vSpace > 0 {
+					(*tokens)[idx].AdjustIndents(ipd + (*tokens)[idx].indents)
+				}
+			}
+		}
+
+		if (*tokens)[idx].IsKeyword() {
+			pKwVal = (*tokens)[idx].AsUpper()
+		}
+	}
+}
+
 func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 	indents := 0
 	inLogical := false
-	logicalIndents := 0
 	logicalStart := 0
-	pKwVal := ""
 	lineLen := 0
 
-	idxMax := len(tokens) - 1
-	//log.Printf("wrapPLxLogical  [%s] [%s]", tokens[0].value, tokens[idxMax].value)
+	for _, st := range []string{"BLK", "ASN"} {
+		for idx, cTok := range tokens {
 
-	for idx := 0; idx <= idxMax; idx++ {
-
-		if tokens[idx].vSpace > 0 {
-			indents = tokens[idx].indents
-			lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
-		}
-
-		switch tokens[idx].AsUpper() {
-
-		case "IF", "ELSIF", "ELSEIF", "WHEN":
-			//log.Printf("wrapPLxLogical   [%s]", tokens[idx].value)
-			inLogical = true
-			logicalStart = idx
-			logicalIndents = indents
-		case "THEN":
-			if inLogical {
-				logicalCnt := 0
-				//logicalLen := calcSliceLen(e, bagType, tokens[logicalStart:idx])
-				pkv := pKwVal
-
-				for i := logicalStart; i <= idx; i++ {
-
-					switch tokens[i].AsUpper() {
-					case "AND", "OR":
-						logicalCnt = adjLogicalCnt(logicalCnt, pkv, tokens[i])
-					}
-
-					if tokens[i].IsKeyword() {
-						pkv = tokens[i].AsUpper()
-					}
-				}
-
-				splitOnLogical := false
-
-				//log.Printf("wrapPLxLogical   logicalCnt: %d, logicalLen > e.MaxLineLength(): %t", logicalCnt, logicalLen > e.MaxLineLength())
-
-				switch logicalCnt {
-				case 0:
-					// nada
-				case 1, 2, 3:
-					//splitOnLogical = logicalLen > e.MaxLineLength()
-					splitOnLogical = lineLen > e.MaxLineLength()
-				default:
-					splitOnLogical = true
-				}
-
-				if splitOnLogical {
-
-					pkv = ""
-					//ipd := logicalIndents + 1
-					//ipd := logicalIndents
-					ipd := 0
-
-					for i := logicalStart; i <= idx; i++ {
-
-						switch tokens[i].AsUpper() {
-						case "(":
-							ipd++
-						case ")":
-							ipd--
-							//if i > logicalStart {
-							if tokens[i].vSpace > 0 {
-								tokens[i].AdjustIndents(ipd - 1)
-							}
-							//}
-						case "AND", "OR":
-							if isLogical(pkv, tokens[i]) {
-								tokens[i].EnsureVSpace()
-								//if ipd == 0 {
-								//	tokens[i].AdjustIndents(logicalIndents + 1)
-								//} else {
-								tokens[i].AdjustIndents(logicalIndents + ipd + 1)
-								//}
-							}
-						default:
-							if i > logicalStart {
-								if tokens[i].vSpace > 0 {
-									tokens[i].AdjustIndents(ipd + tokens[i].indents)
-								}
-							}
-						}
-
-						if tokens[i].IsKeyword() {
-							pkv = tokens[i].AsUpper()
-						}
-					}
+			if !inLogical {
+				if cTok.vSpace > 0 {
+					indents = cTok.indents
+					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 				}
 			}
-			logicalStart = 0
-			inLogical = false
-		}
 
-		if tokens[idx].IsKeyword() {
-			pKwVal = tokens[idx].AsUpper()
+			switch st {
+			case "BLK":
+				switch cTok.AsUpper() {
+				case "IF", "ELSIF", "ELSEIF", "WHEN":
+					inLogical = true
+					logicalStart = idx
+				case "THEN":
+					if inLogical {
+						splitPLxLogical(e, bagType, indents, lineLen, logicalStart, idx, &tokens)
+					}
+					logicalStart = 0
+					inLogical = false
+				}
+			case "ASN":
+				switch cTok.AsUpper() {
+				case ":=":
+					inLogical = true
+					logicalStart = idx
+				case ";":
+					if inLogical {
+						splitPLxLogical(e, bagType, indents, lineLen, logicalStart, idx, &tokens)
+					}
+					logicalStart = 0
+					inLogical = false
+				}
+			}
 		}
 	}
-
 	return tokens
 }
 
