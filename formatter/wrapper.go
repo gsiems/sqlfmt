@@ -284,7 +284,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 
 		// Note the following need to either be updated to better handle an
 		// entire token bag or moved to the line-by line block below (or both)
-		//cale_api.dv_ai_mail_address
+
 		tokens = wrapDMLCase(e, bagType, tokens)
 		//tokens = wrapDMLLogical(e, bagType, tokens)
 
@@ -594,11 +594,10 @@ func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 			if caseDepth < cdl {
 				if tokens[idx].vSpace > 0 {
 					indents = calcIndent(bagType, tokens[idx])
-			switch tokens[idx].AsUpper() {
-			case "SELECT":
-				indents++
-			}
-
+					switch tokens[idx].AsUpper() {
+					case "SELECT":
+						indents++
+					}
 					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 					ipd = 0
 				}
@@ -643,8 +642,8 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 		switch {
 		case isLogical(pKwVal, tokens[idx]):
 			lCnt++
-		//case isOperator(0, tokens[idx]):
-		//	oCnt++
+			//case isOperator(0, tokens[idx]):
+			//	oCnt++
 		}
 
 		if tokens[idx].vSpace > 0 {
