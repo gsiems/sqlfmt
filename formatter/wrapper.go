@@ -7,6 +7,7 @@ import (
 
 	"github.com/gsiems/sqlfmt/dialect"
 	"github.com/gsiems/sqlfmt/env"
+	"github.com/gsiems/sqlfmt/parser"
 )
 
 const (
@@ -107,6 +108,20 @@ func isLogical(pKwVal string, cTok FmtToken) bool {
 		}
 	case "OR":
 		return true
+	}
+	return false
+}
+
+func isOperator(opType int, cTok FmtToken) bool {
+	switch cTok.value {
+	case "||":
+		return opType == 0 || opType == concatOps
+	case "+", "-":
+		return opType == 0 || opType == mathAddSubOps
+	case "*", "/":
+		return opType == 0 || opType == mathMultDivOps
+	case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
+		return opType == 0 || opType == compareOps
 	}
 	return false
 }
@@ -269,7 +284,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 
 		// Note the following need to either be updated to better handle an
 		// entire token bag or moved to the line-by line block below (or both)
-
+		//cale_api.dv_ai_mail_address
 		tokens = wrapDMLCase(e, bagType, tokens)
 		//tokens = wrapDMLLogical(e, bagType, tokens)
 
@@ -314,7 +329,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 // wrapLine takes "one lines worth" of tokens and attempts to add line breaks
 // as needed
 func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
-	//return tokens
+	return tokens
 	if len(tokens) == 0 {
 		return tokens
 	}
@@ -350,43 +365,203 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 	return tokens
 }
 
+func addDMLCaseBreaks(e *env.Env, bagType, indents, parensDepth, lineLen, idxStart, idxEnd int, tokens *[]FmtToken) {
+
+	caseLen := 0
+	caseCnt := 0
+	whenCnt := 0
+	caseDepth := 0
+	caseInd := indents + parensDepth
+
+	for idx := idxStart; idx <= idxEnd; idx++ {
+		caseLen += calcLen(e, (*tokens)[idx])
+		switch (*tokens)[idx].AsUpper() {
+		case "CASE":
+			caseCnt++
+		case "WHEN", "ELSE":
+			whenCnt++
+		}
+	}
+
+	// Wrap the start of the CASE statement as appropriate
+	if lineLen > e.MaxLineLength() {
+		switch {
+		case (*tokens)[idxStart].vSpace > 0:
+			// nada
+		case idxStart == 0:
+			// nada
+		case (*tokens)[idxStart-1].typeOf == parser.Operator:
+			if (*tokens)[idxStart-1].vSpace == 0 {
+				(*tokens)[idxStart-1].EnsureVSpace()
+				(*tokens)[idxStart-1].indents = caseInd + 1
+				caseInd += 2
+				caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart-1].indents))
+			}
+		default:
+			switch (*tokens)[idxStart-1].value {
+			case "(":
+				if (*tokens)[idxStart-1].vSpace == 0 {
+					(*tokens)[idxStart].EnsureVSpace()
+					(*tokens)[idxStart].indents = caseInd
+					caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart].indents))
+				}
+			case ",":
+				if (*tokens)[idxStart-1].vSpace == 0 {
+					(*tokens)[idxStart].EnsureVSpace()
+					(*tokens)[idxStart].indents = caseInd
+					caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart].indents))
+				}
+			}
+		}
+	}
+
+	if (*tokens)[idxStart].vSpace > 0 {
+		caseInd = calcIndent(bagType, (*tokens)[idxStart]) + 1
+	}
+
+	// Wrap the end of the CASE statement as needed
+	// ... first determine the length of the line after the statement
+	postCaseLineLen := 0
+	for idx := idxEnd + 1; idx < len(*tokens); idx++ {
+		if (*tokens)[idx].vSpace > 0 {
+			break
+		}
+		postCaseLineLen += calcLen(e, (*tokens)[idx])
+	}
+
+	// ... then wrap as needed
+	if caseLen+postCaseLineLen > e.MaxLineLength() {
+		switch {
+		case len(*tokens)-1 == idxEnd:
+		// nada
+		case (*tokens)[idxEnd+1].typeOf == parser.Operator:
+			if (*tokens)[idxEnd+1].vSpace == 0 {
+				(*tokens)[idxEnd+1].EnsureVSpace()
+				(*tokens)[idxEnd+1].indents = indents + parensDepth + 1
+				postCaseLineLen = 0
+			}
+		default:
+			switch (*tokens)[idxEnd+1].AsUpper() {
+			case ",":
+				if len(*tokens) > idxEnd+2 {
+					if (*tokens)[idxEnd+2].vSpace == 0 {
+						(*tokens)[idxEnd+2].EnsureVSpace()
+						(*tokens)[idxEnd+2].indents = indents + parensDepth
+						postCaseLineLen = 1
+					}
+				}
+			case ")":
+				if (*tokens)[idxEnd+1].vSpace == 0 {
+					(*tokens)[idxEnd+1].EnsureVSpace()
+					(*tokens)[idxEnd+1].indents = indents + parensDepth
+					postCaseLineLen = 0
+				}
+			}
+		}
+	}
+
+	// Check if any further wrapping is needed
+	if caseLen+postCaseLineLen < e.MaxLineLength() && caseCnt == 1 && whenCnt < 3 {
+		return
+	}
+
+	// Determine how long the END... is
+	endLen := 0
+	for idx := idxEnd; idx < len(*tokens); idx++ {
+		if (*tokens)[idx].vSpace > 0 {
+			break
+		}
+		if (*tokens)[idx].value == "," {
+			endLen += calcLen(e, (*tokens)[idx])
+			break
+		}
+		if (*tokens)[idx].value == ")" {
+			break
+		}
+	}
+
+	// Add wrapping of WHEN, END, and possibly THEN statements
+	if (*tokens)[idxEnd].vSpace == 0 {
+		(*tokens)[idxEnd].EnsureVSpace()
+		(*tokens)[idxEnd].indents = caseInd
+	}
+	caseDepth = 0
+
+	for idx := idxStart + 1; idx < idxEnd; idx++ {
+
+		switch (*tokens)[idx].AsUpper() {
+		case "CASE":
+			caseDepth++
+		case "END":
+			caseDepth--
+		case "WHEN", "ELSE":
+			if caseDepth == 0 {
+				if (*tokens)[idx].vSpace == 0 {
+					(*tokens)[idx].EnsureVSpace()
+				}
+				(*tokens)[idx].indents = caseInd
+				// determine length to end of the THEN statement
+				idxThen := 0
+				icd := 0
+				whenLen := calcLen(e, (*tokens)[idx])
+				whenDone := false
+				for j := idx + 1; j <= idxEnd; j++ {
+					if whenDone {
+						break
+					}
+
+					ctVal := (*tokens)[j].AsUpper()
+
+					switch ctVal {
+					case "CASE":
+						icd++
+					}
+
+					if icd == 0 {
+						switch ctVal {
+						case "THEN":
+							idxThen = j
+						case "WHEN", "ELSE":
+							if idxThen > 0 {
+								if whenLen > e.MaxLineLength() {
+									if (*tokens)[idxThen].vSpace == 0 {
+										(*tokens)[idxThen].EnsureVSpace()
+									}
+									(*tokens)[idxThen].indents = caseInd + 1
+								}
+								whenDone = true
+								whenLen = 0
+							}
+						case "END":
+							if idxThen > 0 {
+								if whenLen+endLen > e.MaxLineLength() {
+									if (*tokens)[idxThen].vSpace == 0 {
+										(*tokens)[idxThen].EnsureVSpace()
+									}
+									(*tokens)[idxThen].indents = caseInd + 1
+								}
+								whenDone = true
+							}
+						}
+					}
+
+					whenLen += calcLen(e, (*tokens)[j])
+
+					switch ctVal {
+					case "END":
+						icd--
+					}
+				}
+			}
+		}
+	}
+}
+
 func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 	if len(tokens) == 0 {
 		return tokens
 	}
-
-	// Note that it is possible for a line to contain multiple case statements
-	// and/or nested case statements.
-	// For example:
-	//
-	//   case
-	//       when expression_1 then 1
-	//       when expression_2 then 2
-	//       when expression_3 then 3
-	//       else 4
-	//       end
-	//
-	//   concat_ws ( ':',
-	//       case
-	//           when expression_1 then 1
-	//           when expression_2 then 2
-	//           end,
-	//       case
-	//           when expression_3 then 3
-	//           else 4
-	//           end )
-	//
-	//   case expression_1
-	//       when a then 1
-	//       when b then 2
-	//       when c then
-	//           case
-	//               when expression_2 then 42
-	//               else 43
-	//               end
-	//       else 4
-	//       end
 
 	idxMax := len(tokens) - 1
 	cdMax := 0
@@ -411,118 +586,38 @@ func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 		caseDepth = 0
 		idxStart := 0
-		idxWhen := 0
 		indents := 0
-		idxThens := make(map[int]int)
-		whenLens := make(map[int]int)
-		whenLgcl := make(map[int][]int)
-		var idxWhens []int
+		ipd := 0
+		lineLen := 0
 
 		for idx := 0; idx <= idxMax; idx++ {
-
-			switch tokens[idx].AsUpper() {
-			case "CASE":
-				caseDepth++
-			}
-
 			if caseDepth < cdl {
 				if tokens[idx].vSpace > 0 {
 					indents = calcIndent(bagType, tokens[idx])
-				}
+			switch tokens[idx].AsUpper() {
+			case "SELECT":
+				indents++
 			}
 
-			if caseDepth == cdl {
-
-				switch tokens[idx].AsUpper() {
-				case "CASE":
-					idxStart = idx
-					idxWhens = nil
-
-				case "WHEN", "ELSE":
-					if idxWhen > 0 {
-						whenLens[idxWhen] = calcSliceLen(e, bagType, tokens[idxWhen:idx])
-					}
-					idxWhens = append(idxWhens, idx)
-
-					idxWhen = idx
-				case "THEN":
-					idxThens[idxWhen] = idx
-
-				case "END":
-					whenLens[idxWhen] = calcSliceLen(e, bagType, tokens[idxWhen:idx])
-					idxEnd := idx
-					lenCase := calcSliceLen(e, bagType, tokens[idxStart:idxEnd])
-					lenToEnd := 0
-					// TODO: if the next token is "AS" then include lenToEnd?
-					if idx < idxMax {
-						switch tokens[idx+1].AsUpper() {
-						case "AS": //, "||", "+", "-", "/", "*" :
-							lenToEnd = calcLenToLineEnd(e, bagType, tokens[idxEnd:])
-						}
-					}
-
-					addBreaks := false
-					switch {
-					case len(idxWhens) > 2:
-						addBreaks = true
-					case lenCase+lenToEnd > e.MaxLineLength():
-						addBreaks = true
-					}
-
-					if addBreaks {
-
-						tpi := indents
-						tpd := 0
-						leadLen := len(strings.Repeat(e.Indent(), tpi))
-
-						for i := idxStart; i <= idxEnd; i++ {
-
-							switch tokens[i].value {
-							case "(":
-								tpd++
-							case ")":
-								tpd--
-							}
-
-							if whenLen, ok := whenLens[i]; ok {
-								tokens[i].EnsureVSpace()
-								tokens[i].AdjustIndents(tpi + 1)
-
-								if leadLen+whenLen > e.MaxLineLength() {
-									if thenIdx, ok := idxThens[i]; ok {
-										tokens[thenIdx+1].EnsureVSpace()
-										tokens[thenIdx+1].AdjustIndents(tpi + 2)
-									}
-								}
-
-								if idxLgcls, ok := whenLgcl[i]; ok {
-									if len(idxLgcls) > 1 {
-										for _, j := range idxLgcls {
-											tokens[j].EnsureVSpace()
-											tokens[j].AdjustIndents(tpi + tpd + 2)
-										}
-									}
-								}
-							}
-						}
-						tokens[idxEnd].EnsureVSpace()
-						tokens[idxEnd].AdjustIndents(tpi + 1)
-
-						indents = calcIndent(bagType, tokens[idx]) - 1
-					}
-				default:
-					if idx > 0 {
-						if isLogical(tokens[idx-1].AsUpper(), tokens[idx]) {
-							whenLgcl[idxWhen] = append(whenLgcl[idxWhen], idx)
-						}
-					}
+					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+					ipd = 0
 				}
 			}
 
 			switch tokens[idx].AsUpper() {
-			case "END":
+			case "(":
+				ipd++
+			case ")":
+				ipd--
+			case "CASE":
+				caseDepth++
 				if caseDepth == cdl {
 					idxStart = idx
+				}
+			case "END":
+				if caseDepth == cdl {
+					addDMLCaseBreaks(e, bagType, indents, ipd, lineLen, idxStart, idx, &tokens)
+					ipd = 0
 				}
 				caseDepth--
 			}
@@ -538,28 +633,65 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	}
 
 	idxMax := len(tokens) - 1
-	indents := 0
-	parensDepth := 0
 	pKwVal := ""
+	idxStart := 0
+	lCnt := 0
+	//oCnt := 0
 
 	for idx := 0; idx <= idxMax; idx++ {
 
+		switch {
+		case isLogical(pKwVal, tokens[idx]):
+			lCnt++
+		//case isOperator(0, tokens[idx]):
+		//	oCnt++
+		}
+
 		if tokens[idx].vSpace > 0 {
-			indents = calcIndent(bagType, tokens[idx])
-		}
-
-		switch tokens[idx].AsUpper() {
-		case "(":
-			parensDepth++
-		case ")":
-			parensDepth--
-		case "AND", "OR":
-			if isLogical(pKwVal, tokens[idx]) {
-				tokens[idx].EnsureVSpace()
-				tokens[idx].AdjustIndents(indents + parensDepth)
+			lineLen := calcLenToLineEnd(e, bagType, tokens[idxStart:])
+			indents := calcIndent(bagType, tokens[idxStart])
+			switch tokens[idxStart].AsUpper() {
+			case "SELECT":
+				indents++
 			}
-		}
+			addBreaks := false
+			if lCnt > 0 {
+				switch {
+				case lineLen > e.MaxLineLength():
+					addBreaks = true
+				//case oCnt > 0:
+				//	addBreaks = true
+				case lCnt > 2:
+					addBreaks = true
+				}
+			}
 
+			if addBreaks {
+				ipd := 0
+				pkv := ""
+				for i := idxStart; i < idx; i++ {
+					switch tokens[i].value {
+					case "(":
+						ipd++
+					case ")":
+						ipd--
+					default:
+						if isLogical(pkv, tokens[i]) {
+							tokens[i].EnsureVSpace()
+							tokens[i].indents = indents + ipd + 1
+						}
+					}
+
+					if tokens[i].IsKeyword() {
+						pkv = tokens[i].AsUpper()
+					}
+				}
+			}
+
+			lCnt = 0
+			//oCnt = 0
+			idxStart = idx
+		}
 		if tokens[idx].IsKeyword() {
 			pKwVal = tokens[idx].AsUpper()
 		}
@@ -1208,18 +1340,7 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 			}
 
 			if parensDepth == pdl && lSegLen > e.MaxLineLength() {
-				addBreak := false
-				switch tokens[idx].value {
-				case "||":
-					addBreak = opType == concatOps
-				case "+", "-":
-					addBreak = opType == mathAddSubOps
-				case "*", "/":
-					addBreak = opType == mathMultDivOps
-				case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
-					addBreak = opType == compareOps
-				}
-				if addBreak {
+				if isOperator(opType, tokens[idx]) {
 					tokens[idx].EnsureVSpace()
 					tokens[idx].AdjustIndents(indents + parensDepth + 1)
 				}
@@ -1283,20 +1404,8 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 					doCheck = true
 				}
 
-			case "||":
-				if opType == concatOps {
-					cCnt++
-				}
-			case "+", "-":
-				if opType == mathAddSubOps {
-					cCnt++
-				}
-			case "*", "/":
-				if opType == mathMultDivOps {
-					cCnt++
-				}
-			case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
-				if opType == compareOps {
+			default:
+				if isOperator(opType, cTok) {
 					cCnt++
 				}
 			}
@@ -1333,18 +1442,8 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 			}
 
 			if tpd == pdl {
-				addBreak := false
-				switch tokens[i].value {
-				case "||":
-					addBreak = opType == concatOps
-				case "+", "-":
-					addBreak = opType == mathAddSubOps
-				case "*", "/":
-					addBreak = opType == mathMultDivOps
-				case "=", "==", "<", ">", "<>", "!=", ">=", "<=":
-					addBreak = opType == compareOps
-				}
-				if addBreak {
+
+				if isOperator(opType, tokens[i]) {
 					tokens[i].EnsureVSpace()
 					tokens[i].AdjustIndents(tpi + tpd + 1)
 				}
@@ -1746,7 +1845,7 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	return tokens
 }
 
-func splitPLxLogical(e *env.Env, bagType, indents, lineLen, idxStart, idxEnd int, tokens *[]FmtToken) {
+func addPLxLogicalBreaks(e *env.Env, bagType, indents, lineLen, idxStart, idxEnd int, tokens *[]FmtToken) {
 
 	ipd := 0
 	lCnt := 0
@@ -1826,7 +1925,7 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 					logicalStart = idx
 				case "THEN":
 					if inLogical {
-						splitPLxLogical(e, bagType, indents, lineLen, logicalStart, idx, &tokens)
+						addPLxLogicalBreaks(e, bagType, indents, lineLen, logicalStart, idx, &tokens)
 					}
 					logicalStart = 0
 					inLogical = false
@@ -1838,7 +1937,7 @@ func wrapPLxLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 					logicalStart = idx
 				case ";":
 					if inLogical {
-						splitPLxLogical(e, bagType, indents, lineLen, logicalStart, idx, &tokens)
+						addPLxLogicalBreaks(e, bagType, indents, lineLen, logicalStart, idx, &tokens)
 					}
 					logicalStart = 0
 					inLogical = false
