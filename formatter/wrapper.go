@@ -286,7 +286,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 		// entire token bag or moved to the line-by line block below (or both)
 
 		tokens = wrapDMLCase(e, bagType, tokens)
-		//tokens = wrapDMLLogical(e, bagType, tokens)
+		tokens = wrapDMLLogical(e, bagType, tokens)
 
 	case PLxBody:
 		tokens = wrapPLxCalls(e, bagType, maxParensDepth, tokens)
@@ -329,7 +329,7 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 // wrapLine takes "one lines worth" of tokens and attempts to add line breaks
 // as needed
 func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
-	return tokens
+	//return tokens
 	if len(tokens) == 0 {
 		return tokens
 	}
@@ -365,7 +365,7 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 	return tokens
 }
 
-func addDMLCaseBreaks(e *env.Env, bagType, indents, parensDepth, lineLen, idxStart, idxEnd int, tokens *[]FmtToken) {
+func addInlineCaseBreaks(e *env.Env, bagType, indents, parensDepth, lineLen, idxStart, idxEnd int, tokens *[]FmtToken) {
 
 	caseLen := 0
 	caseCnt := 0
@@ -387,36 +387,45 @@ func addDMLCaseBreaks(e *env.Env, bagType, indents, parensDepth, lineLen, idxSta
 	if lineLen > e.MaxLineLength() {
 		switch {
 		case (*tokens)[idxStart].vSpace > 0:
-			// nada
+			caseInd = (*tokens)[idxStart].indents + 1
 		case idxStart == 0:
 			// nada
-		case (*tokens)[idxStart-1].typeOf == parser.Operator:
-			if (*tokens)[idxStart-1].vSpace == 0 {
-				(*tokens)[idxStart-1].EnsureVSpace()
-				(*tokens)[idxStart-1].indents = caseInd + 1
-				caseInd += 2
-				caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart-1].indents))
-			}
 		default:
 			switch (*tokens)[idxStart-1].value {
+			case "=>":
+				if (*tokens)[idxStart-1].vSpace == 0 {
+					(*tokens)[idxStart].EnsureVSpace()
+					(*tokens)[idxStart].indents = caseInd + 1
+					caseInd += 2
+					caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart].indents))
+				}
 			case "(":
 				if (*tokens)[idxStart-1].vSpace == 0 {
 					(*tokens)[idxStart].EnsureVSpace()
 					(*tokens)[idxStart].indents = caseInd
+					caseInd++
 					caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart].indents))
 				}
 			case ",":
 				if (*tokens)[idxStart-1].vSpace == 0 {
 					(*tokens)[idxStart].EnsureVSpace()
 					(*tokens)[idxStart].indents = caseInd
+					caseInd++
 					caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart].indents))
+				}
+			default:
+				if (*tokens)[idxStart-1].typeOf == parser.Operator {
+					if (*tokens)[idxStart-1].vSpace == 0 {
+						(*tokens)[idxStart-1].EnsureVSpace()
+						(*tokens)[idxStart-1].indents = caseInd + 1
+						caseInd += 2
+						caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart-1].indents))
+					}
 				}
 			}
 		}
-	}
-
-	if (*tokens)[idxStart].vSpace > 0 {
-		caseInd = calcIndent(bagType, (*tokens)[idxStart]) + 1
+	} else {
+		caseInd++
 	}
 
 	// Wrap the end of the CASE statement as needed
@@ -594,10 +603,6 @@ func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 			if caseDepth < cdl {
 				if tokens[idx].vSpace > 0 {
 					indents = calcIndent(bagType, tokens[idx])
-					switch tokens[idx].AsUpper() {
-					case "SELECT":
-						indents++
-					}
 					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 					ipd = 0
 				}
@@ -615,7 +620,7 @@ func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				}
 			case "END":
 				if caseDepth == cdl {
-					addDMLCaseBreaks(e, bagType, indents, ipd, lineLen, idxStart, idx, &tokens)
+					addInlineCaseBreaks(e, bagType, indents, ipd, lineLen, idxStart, idx, &tokens)
 					ipd = 0
 				}
 				caseDepth--
@@ -1555,8 +1560,6 @@ func wrapPLxCalls(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 
 func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
-	//log.Print("wrapPLxCase")
-
 	if len(tokens) == 0 {
 		return tokens
 	}
@@ -1565,8 +1568,8 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	// structures is that the in-lined ones will not have any semi-colons
 	// between the "CASE" and the "END" tokens
 
-	// For in-lined we wrap similar to DML casing, otherwise we wrap similar to
-	// IF ... THEN ... END IF structures.
+	// For in-lined use the same code as for DML casing, otherwise wrap similar
+	// to IF ... THEN ... END IF structures.
 
 	caseDepth := 0
 	cdMax := 0
@@ -1595,19 +1598,14 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 		caseDepth := 0
 		caseIdxs := make(map[int]string)
-		doCheck := false
 		idxEnd := 0
 		idxStart := 0
 		ifCnt := 0
-		//inCase := false
 		indents := 0
+		ipd := 0
 		lineLen := 0
-		logicalCnt := 0
-		parensDepth := 0
 		pKwVal := ""
 		scCnt := 0
-		idxLineStart := 0
-		//log.Printf("    cdl: %d", cdl)
 
 		for idx := 0; idx <= idxMax; idx++ {
 
@@ -1619,16 +1617,18 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 						indents = calcIndent(bagType, tokens[idx])
 					}
 					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
-					idxLineStart = idx
+					ipd = 0
 				}
 			}
 
 			cTok := tokens[idx]
 			ctVal := cTok.AsUpper()
 
-			//log.Printf("        caseDepth: %d", caseDepth)
-
 			switch ctVal {
+			case "(":
+				ipd++
+			case ")":
+				ipd--
 			case "CASE":
 				caseDepth++
 				if caseDepth == cdl {
@@ -1637,25 +1637,16 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 					idxStart = idx
 					ifCnt = 0
 					scCnt = 0
-					//inCase = true
 				}
 			}
 
-			//log.Printf("        inCase: %t, indents: %d, %s", inCase, indents, cTok.String())
-
 			if caseDepth == cdl {
 				switch ctVal {
-				case "(":
-					parensDepth++
-				case ")":
-					parensDepth--
 				case "IF":
 					ifCnt++
 				case "END IF":
 					ifCnt--
 				}
-
-				logicalCnt = adjLogicalCnt(logicalCnt, pKwVal, cTok)
 
 				if ifCnt == 0 {
 					switch ctVal {
@@ -1671,13 +1662,13 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				}
 			}
 
+			doCheck := false
 			switch ctVal {
 			case "END", "END CASE":
 				if caseDepth == cdl {
 					caseIdxs[idx] = ctVal
 					doCheck = true
 					idxEnd = idx
-					//inCase = false
 				}
 				caseDepth--
 			}
@@ -1689,7 +1680,6 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 			if !doCheck {
 				continue
 			}
-			doCheck = false
 
 			var ary []string
 			for i := idxStart; i <= idxEnd; i++ {
@@ -1701,109 +1691,7 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 			if scCnt == 0 {
 				////////////////////////////////////////////////////////
 				// in-line case statement
-
-				// If the length is too long, or there are to many WHENs or
-				// too many logicals then wrap things.
-				// If there are any nested bags then wrap things
-				cc := 0
-				bc := 0
-				tokens[idxStart].vSpace = 0
-				tokens[idxStart].hSpace = " "
-				tokens[idxEnd].vSpace = 0
-				tokens[idxEnd].hSpace = " "
-
-				for i := idxStart + 1; i < idxEnd; i++ {
-					if _, ok := caseIdxs[i]; ok {
-						cc++
-					}
-					if tokens[i].IsBag() {
-						bc++
-					}
-				}
-
-				addWraps := false
-				wrapCase := false
-				switch {
-				case lineLen > e.MaxLineLength():
-					addWraps = true
-					lte := calcLenToLineEnd(e, bagType, tokens[idxStart:])
-
-					switch {
-					case lte <= e.MaxLineLength():
-						// nada
-					case idxStart == 0:
-						wrapCase = true
-					case tokens[idxStart-1].value == "=>":
-						// nada
-					default:
-						wrapCase = true
-					}
-
-				case bc > 0:
-					addWraps = true
-				case cc > 3:
-					addWraps = true
-				case logicalCnt > 2:
-					addWraps = true
-				}
-
-				if !addWraps {
-					idxStart = 0
-					idxEnd = 0
-					continue
-				}
-
-				tpd := parensDepth
-				tkw := ""
-
-				tpi := indents
-				if idxLineStart != idxStart {
-					tpi++
-				}
-
-				if wrapCase {
-					tokens[idxStart].EnsureVSpace()
-					tokens[idxStart].AdjustIndents(tpi)
-					tpi = calcIndent(bagType, tokens[idxStart])
-				}
-
-				tokens[idxEnd].EnsureVSpace()
-				tokens[idxEnd].AdjustIndents(tpi)
-
-				for i := idxStart + 1; i < idxEnd; i++ {
-					switch tokens[i].AsUpper() {
-					case "(":
-						tpd++
-					case ")":
-						tpd--
-
-					case "WHEN", "ELSE":
-						if _, ok := caseIdxs[i]; ok {
-							tokens[i].EnsureVSpace()
-							tokens[i].AdjustIndents(tpi + 1)
-						}
-					default:
-						switch tokens[i-1].AsUpper() {
-						case "THEN", "ELSE":
-							if _, ok := caseIdxs[i-1]; ok {
-								tokens[i].EnsureVSpace()
-								tokens[i].AdjustIndents(tpi + 2)
-							}
-						default:
-							if tokens[i].vSpace > 0 {
-								tokens[i].AdjustIndents(tokens[i].indents + 2)
-							}
-							if isLogical(tkw, tokens[i]) {
-								tokens[idxStart].EnsureVSpace()
-								tokens[idxStart].AdjustIndents(tpi + tpd)
-							}
-						}
-					}
-
-					if tokens[i].IsKeyword() {
-						tkw = tokens[i].AsUpper()
-					}
-				}
+				addInlineCaseBreaks(e, bagType, indents, ipd, lineLen, idxStart, idx, &tokens)
 				idxStart = 0
 				idxEnd = 0
 
