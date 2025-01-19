@@ -635,7 +635,6 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	//oCnt := 0
 
 	for idx := 0; idx <= idxMax; idx++ {
-
 		switch {
 		case isLogical(pKwVal, tokens[idx]):
 			lCnt++
@@ -643,7 +642,15 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 			//	oCnt++
 		}
 
-		if tokens[idx].vSpace > 0 {
+		doCheck := false
+		switch {
+		case tokens[idx].vSpace > 0:
+			doCheck = true
+		case idx == idxMax:
+			doCheck = true
+		}
+
+		if doCheck {
 			lineLen := calcLenToLineEnd(e, bagType, tokens[idxStart:])
 			indents := calcIndent(bagType, tokens[idxStart])
 			switch tokens[idxStart].AsUpper() {
