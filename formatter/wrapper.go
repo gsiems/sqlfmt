@@ -22,11 +22,13 @@ const (
 
 func opsName(i int) string {
 	var names = map[int]string{
-		compareOps: "compareOps",
-		concatOps:  "concatOps",
-		logicOps:   "logicOps",
-		mathOps:    "mathOps",
-		winFuncOps: "winFuncOps",
+		compareOps:     "compareOps",
+		concatOps:      "concatOps",
+		logicOps:       "logicOps",
+		mathOps:        "mathOps",
+		mathAddSubOps:  "mathAddSubOps",
+		mathMultDivOps: "mathMultDivOps",
+		winFuncOps:     "winFuncOps",
 	}
 
 	if tName, ok := names[i]; ok {
@@ -282,9 +284,6 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 			tokens = wrapOnMod2Commas(e, bagType, "DECODE", false, tokens)
 		}
 
-		// Note the following need to either be updated to better handle an
-		// entire token bag or moved to the line-by line block below (or both)
-
 		tokens = wrapDMLCase(e, bagType, tokens)
 		tokens = wrapDMLLogical(e, bagType, tokens)
 
@@ -334,34 +333,27 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 		return tokens
 	}
 
-	lineLen := calcSliceLen(e, bagType, tokens)
+	for pdl := 0; pdl <= mxPd; pdl++ {
 
-	if lineLen > e.MaxLineLength() {
+		// A work in progress...
+		// Order matters but may be/is probably context specific...
+		// Maybe consider the original vSpace for operators
+		//switch pdl {
+		//case 0:
+		//
+		//	tokens = wrapOnCommas(e, bagType, pdl, tokens)
+		//	tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
+		//	tokens = wrapOnMathOps(e, bagType, pdl, tokens)
+		//	tokens = wrapOnCompOps(e, bagType, pdl, tokens)
+		//
+		//default:
 
-		for pdl := 0; pdl <= mxPd; pdl++ {
+		tokens = wrapOnCompOps(e, bagType, pdl, tokens)
+		tokens = wrapOnMathOps(e, bagType, pdl, tokens)
+		tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
+		tokens = wrapOnCommas(e, bagType, pdl, tokens)
 
-			// A work in progress...
-			// Order matters but may be/is probably context specific...
-			// Maybe consider the original vSpace for operators
-			//switch pdl {
-			//case 0:
-			//
-			//	tokens = wrapOnCommas(e, bagType, pdl, tokens)
-			//	tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
-			//	tokens = wrapOnMathOps(e, bagType, pdl, tokens)
-			//	tokens = wrapOnCompOps(e, bagType, pdl, tokens)
-			//
-			//default:
-
-			tokens = wrapOnCompOps(e, bagType, pdl, tokens)
-			tokens = wrapOnMathOps(e, bagType, pdl, tokens)
-			tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
-			tokens = wrapOnCommas(e, bagType, pdl, tokens)
-			//}
-
-		}
 	}
-
 	return tokens
 }
 
@@ -1604,7 +1596,6 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 		indents := 0
 		ipd := 0
 		lineLen := 0
-		pKwVal := ""
 		scCnt := 0
 
 		for idx := 0; idx <= idxMax; idx++ {
@@ -1673,9 +1664,6 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				caseDepth--
 			}
 
-			if cTok.IsKeyword() {
-				pKwVal = ctVal
-			}
 
 			if !doCheck {
 				continue
