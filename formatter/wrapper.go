@@ -1315,154 +1315,44 @@ func wrapOnMathOps(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 }
 
 func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtToken {
-	//log.Printf("    wrapOnOps (%d)", pdl)
+	//	log.Printf("wrapOnOps bagType: %s, opType: %s, pdl: %d", nameOf(bagType), opsName(opType), pdl)
 
 	if len(tokens) == 0 {
 		return tokens
 	}
 
-	//addBreaks := false
-	cCnt := 0
-	idxEnd := 0
-	idxLineStart := 0
-	idxStart := 0
-	indents := 0
-	lSegLen := 0
-	parensDepth := 0
-	pSetLen := 0
-	lineLen := 0
 	idxMax := len(tokens) - 1
+	indents := 0
+	parensDepth := 0
 
-	if pdl == 0 {
-
-		lSegLen = calcLenToLineEnd(e, bagType, tokens)
-		//log.Printf("    len(tokens): %d, lSegLen: %d", len(tokens), lSegLen)
-
-		for idx := 0; idx <= idxMax; idx++ {
-
-			if tokens[idx].vSpace > 0 {
-				indents = calcIndent(bagType, tokens[idx])
-				lSegLen = calcLenToLineEnd(e, bagType, tokens[idx:])
-			}
-
-			switch tokens[idx].value {
-			case "(":
-				parensDepth++
-			case ")":
-				parensDepth--
-			}
-
-			if parensDepth == pdl && lSegLen > e.MaxLineLength() {
-				if isOperator(opType, tokens[idx]) {
-					tokens[idx].EnsureVSpace()
-					tokens[idx].AdjustIndents(indents + parensDepth + 1)
-				}
-			}
-		}
-
-		return tokens
+	lineLen := calcLenToLineEnd(e, bagType, tokens)
+	if tokens[0].vSpace > 0 {
+		indents = calcIndent(bagType, tokens[0])
 	}
 
-	// pdl is > 0 /////////////////////////////////////////////////////////////
-
 	for idx := 0; idx <= idxMax; idx++ {
-
-		cTok := tokens[idx]
-		doCheck := false
-		//if cTok.vSpace > 0 {
-		//	indents = calcIndent(bagType, cTok)
-		//	idxLineStart = idx
-		//}
-
-		if parensDepth < pdl {
-			if tokens[idx].vSpace > 0 {
-				indents = calcIndent(bagType, cTok)
-
-				lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
-				idxLineStart = idx
-			}
+		if idx > 0 && tokens[idx].vSpace > 0 {
+			lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 		}
 
-		if cTok.value == "(" {
+		switch tokens[idx].value {
+		case "(":
 			parensDepth++
-			if parensDepth == pdl {
-				cCnt = 0
-			}
-		}
-
-		if parensDepth == pdl {
-
-			switch cTok.value {
-			case "(":
-				idxStart = idx
-				if idxStart > idxLineStart {
-					lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxStart])
-				} else {
-					lSegLen = 0
-				}
-
-			case ")":
-				idxEnd = idx
-				if idxEnd > idxStart {
-					pSetLen = calcSliceLen(e, bagType, tokens[idxStart:idxEnd])
-				} else {
-					pSetLen = 0
-				}
-
-				// determine if concat operators were found and if the line is too long
-				if cCnt > 0 && lSegLen+pSetLen > e.MaxLineLength() {
-					doCheck = true
-				}
-				if cCnt > 0 && lineLen > e.MaxLineLength() {
-					doCheck = true
-				}
-
-			default:
-				if isOperator(opType, cTok) {
-					cCnt++
-				}
-			}
-		}
-
-		if cTok.value == ")" {
+		case ")":
 			parensDepth--
 		}
 
-		//log.Printf("lSegLen: %d, indents: %d, pdl: %d, idxStart: %d, idxEnd: %d, addBreaks: %t", lSegLen, indents, pdl, idxStart, idxEnd, addBreaks)
-
-		if !doCheck {
-			continue
-		}
-		doCheck = false
-
-		///////////////////////////////////////////
-
-		//log.Printf("lSegLen: %d, indents: %d, pdl: %d, idxStart: %d, idxEnd: %d", lSegLen, indents, pdl, idxStart, idxEnd)
-
-		tpi := indents
-		tpd := pdl
-		for i := idxStart + 1; i < idxEnd; i++ {
-
-			if tokens[i].vSpace > 0 {
-				tpi = calcIndent(bagType, tokens[i])
-			}
-
-			switch tokens[i].value {
-			case "(":
-				tpd++
-			case ")":
-				tpd--
-			}
-
-			if tpd == pdl {
-
-				if isOperator(opType, tokens[i]) {
-					tokens[i].EnsureVSpace()
-					tokens[i].AdjustIndents(tpi + tpd + 1)
-				}
-			}
+		switch {
+		case parensDepth != pdl:
+			// nada
+		case lineLen <= e.MaxLineLength():
+			// nada
+		case isOperator(opType, tokens[idx]):
+			tokens[idx].EnsureVSpace()
+			tokens[idx].AdjustIndents(indents + parensDepth + 1)
 		}
 	}
+
 	return tokens
 }
 
