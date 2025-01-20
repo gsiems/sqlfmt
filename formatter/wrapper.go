@@ -592,10 +592,14 @@ func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 		lineLen := 0
 
 		for idx := 0; idx <= idxMax; idx++ {
-			if caseDepth < cdl {
+			if idx == 0 || caseDepth < cdl {
 				if tokens[idx].vSpace > 0 {
-					indents = calcIndent(bagType, tokens[idx])
 					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+					indents = calcIndent(bagType, tokens[idx])
+					switch tokens[idx].AsUpper() {
+					case "SELECT":
+						indents++
+					}
 					ipd = 0
 				}
 			}
@@ -632,38 +636,39 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	pKwVal := ""
 	idxStart := 0
 	lCnt := 0
-	//oCnt := 0
+	lineLen := 0
+	indents := 0
+
+	if tokens[0].vSpace > 0 {
+		lineLen = calcLenToLineEnd(e, bagType, tokens)
+		indents = calcIndent(bagType, tokens[0])
+
+		switch tokens[0].AsUpper() {
+		case "SELECT":
+			indents++
+		}
+	}
 
 	for idx := 0; idx <= idxMax; idx++ {
 		switch {
 		case isLogical(pKwVal, tokens[idx]):
 			lCnt++
-			//case isOperator(0, tokens[idx]):
-			//	oCnt++
 		}
 
 		doCheck := false
 		switch {
-		case tokens[idx].vSpace > 0:
-			doCheck = true
 		case idx == idxMax:
+			doCheck = true
+		case tokens[idx+1].vSpace > 0:
 			doCheck = true
 		}
 
 		if doCheck {
-			lineLen := calcLenToLineEnd(e, bagType, tokens[idxStart:])
-			indents := calcIndent(bagType, tokens[idxStart])
-			switch tokens[idxStart].AsUpper() {
-			case "SELECT":
-				indents++
-			}
 			addBreaks := false
 			if lCnt > 0 {
 				switch {
 				case lineLen > e.MaxLineLength():
 					addBreaks = true
-				//case oCnt > 0:
-				//	addBreaks = true
 				case lCnt > 2:
 					addBreaks = true
 				}
@@ -717,8 +722,13 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 		cCnt := 0
 		idxStart := 0
 		indents := 0
-		lSegLen := 0
+		lineLen := 0
 		parensDepth := 0
+
+		if tokens[0].vSpace > 0 {
+			indents = calcIndent(bagType, tokens[0])
+			lineLen = calcLenToLineEnd(e, bagType, tokens)
+		}
 
 		for idx := 0; idx <= idxMax; idx++ {
 
@@ -734,8 +744,7 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 
 			if parensDepth < pdl {
 				if cTok.vSpace > 0 {
-					indents = calcIndent(bagType, cTok)
-					lSegLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 				}
 			}
 
@@ -747,7 +756,8 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 					if cCnt > 1 {
 						idxEnd := idx
 						tpd := pdl
-						if lSegLen > e.MaxLineLength() {
+						// need to check length between start/end?
+						if lineLen > e.MaxLineLength() {
 							for i := idxStart + 1; i < idxEnd; i++ {
 
 								switch tokens[i].value {
@@ -1670,7 +1680,6 @@ func wrapPLxCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				}
 				caseDepth--
 			}
-
 
 			if !doCheck {
 				continue
