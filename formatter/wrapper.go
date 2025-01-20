@@ -597,7 +597,7 @@ func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 					indents = calcIndent(bagType, tokens[idx])
 					switch tokens[idx].AsUpper() {
-					case "SELECT":
+					case "SELECT", "GROUP BY", "ORDER BY":
 						indents++
 					}
 					ipd = 0
