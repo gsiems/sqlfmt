@@ -333,25 +333,15 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 		return tokens
 	}
 
+	// A work in progress...
+	// Order matters but may be/is probably context specific...
+	// Maybe consider the original vSpace for operators
 	for pdl := 0; pdl <= mxPd; pdl++ {
 
-		// A work in progress...
-		// Order matters but may be/is probably context specific...
-		// Maybe consider the original vSpace for operators
-		//switch pdl {
-		//case 0:
-		//
-		//	tokens = wrapOnCommas(e, bagType, pdl, tokens)
-		//	tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
-		//	tokens = wrapOnMathOps(e, bagType, pdl, tokens)
-		//	tokens = wrapOnCompOps(e, bagType, pdl, tokens)
-		//
-		//default:
-
+		tokens = wrapOnCommas(e, bagType, pdl, tokens)
 		tokens = wrapOnCompOps(e, bagType, pdl, tokens)
 		tokens = wrapOnMathOps(e, bagType, pdl, tokens)
 		tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
-		tokens = wrapOnCommas(e, bagType, pdl, tokens)
 
 	}
 	return tokens
