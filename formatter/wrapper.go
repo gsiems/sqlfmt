@@ -745,7 +745,16 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 				switch tokens[idx].value {
 				case ")":
 					if cCnt > 0 {
-						segLen := calcSliceLen(e, bagType, tokens[idxBase:idx]) + calcLenToLineEnd(e, bagType, tokens[idx:])
+						segLen := calcSliceLen(e, bagType, tokens[idxBase:idx])
+						switch {
+						case idx == idxMax:
+							// nada... at the end already
+						case tokens[idx+1].value == ",":
+							segLen++
+						default:
+							segLen += calcLenToLineEnd(e, bagType, tokens[idx:])
+						}
+
 						switch {
 						case lCnt > 0:
 							doWrap = true
