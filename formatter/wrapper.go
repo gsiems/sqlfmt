@@ -720,65 +720,47 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 
 	for pdl := 1; pdl <= mxPd; pdl++ {
 		cCnt := 0
+		idxBase := 0
 		idxStart := 0
 		indents := 0
-		lineLen := 0
+		lCnt := 0
 		parensDepth := 0
 
 		if tokens[0].vSpace > 0 {
 			indents = calcIndent(bagType, tokens[0])
-			lineLen = calcLenToLineEnd(e, bagType, tokens)
 		}
 
 		for idx := 0; idx <= idxMax; idx++ {
 
-			cTok := tokens[idx]
-
-			if cTok.value == "(" {
+			if tokens[idx].value == "(" {
 				parensDepth++
 				if parensDepth == pdl {
 					cCnt = 0
+					lCnt = 0
 					idxStart = idx
 				}
 			}
 
-			if parensDepth < pdl {
-				if cTok.vSpace > 0 {
-					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+			doWrap := false
+			switch {
+			case parensDepth < pdl:
+				if tokens[idx].vSpace > 0 {
+					idxBase = idx
 				}
-			}
+			case parensDepth == pdl:
+				if tokens[idx].vSpace > 0 {
+					lCnt++
+				}
 
-			//if parensDepth == pdl && lSegLen > e.MaxLineLength() {
-			if parensDepth == pdl {
-
-				switch cTok.value {
+				switch tokens[idx].value {
 				case ")":
-					if cCnt > 1 {
-						idxEnd := idx
-						tpd := pdl
-						// need to check length between start/end?
-						if lineLen > e.MaxLineLength() {
-							for i := idxStart + 1; i < idxEnd; i++ {
-
-								switch tokens[i].value {
-								case "(":
-									tpd++
-								case ")":
-									tpd--
-								}
-
-								if tpd == pdl {
-									switch tokens[i].value {
-									case "ORDER BY", "GROUP BY", "PARTITION BY":
-										tokens[i].EnsureVSpace()
-										tokens[i].AdjustIndents(indents + pdl)
-										//default:
-										//	if tokens[i].vSpace > 0 {
-										//		tokens[i].AdjustIndents(tpi + tpd)
-										//	}
-									}
-								}
-							}
+					if cCnt > 0 {
+						segLen := calcSliceLen(e, bagType, tokens[idxBase:idx]) + calcLenToLineEnd(e, bagType, tokens[idx:])
+						switch {
+						case lCnt > 0:
+							doWrap = true
+						case segLen > e.MaxLineLength():
+							doWrap = true
 						}
 					}
 				case "ORDER BY", "GROUP BY", "PARTITION BY":
@@ -786,7 +768,31 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 				}
 			}
 
-			if cTok.value == ")" {
+			if doWrap {
+				tpd := pdl
+				for i := idxStart + 1; i < idx; i++ {
+					switch tokens[i].value {
+					case "(":
+						tpd++
+					case ")":
+						tpd--
+					}
+
+					if tpd == pdl {
+						switch tokens[i].value {
+						case "ORDER BY", "GROUP BY", "PARTITION BY":
+							tokens[i].EnsureVSpace()
+							tokens[i].AdjustIndents(indents + pdl)
+						default:
+							if tokens[i].vSpace > 0 {
+								tokens[i].AdjustIndents(tokens[i].indents + 1)
+							}
+						}
+					}
+				}
+			}
+
+			if tokens[idx].value == ")" {
 				parensDepth--
 			}
 		}
