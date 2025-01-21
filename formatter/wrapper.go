@@ -35,7 +35,6 @@ func opsName(i int) string {
 		return tName
 	}
 	return ""
-
 }
 
 func calcIndent(bagType int, cTok FmtToken) int {
@@ -46,40 +45,33 @@ func calcIndent(bagType int, cTok FmtToken) int {
 	case CommentOnBag:
 		switch cTok.AsUpper() {
 		case "COMMENT":
-			indents++
+			return indents + 1
 		}
 	case DCLBag:
 		switch cTok.AsUpper() {
 		case "GRANT", "REVOKE":
-			indents++
+			return indents + 1
 		}
 	case DDLBag:
 		switch cTok.AsUpper() {
 		case "ALTER":
-			indents++
+			return indents + 1
 		}
 	case DMLBag:
 		switch cTok.AsUpper() {
 		case "SELECT", "INSERT":
-			indents += 2
+			return indents + 2
 		case "FROM", "GROUP BY", "WHERE", "HAVING", "WINDOW", "ORDER BY",
 			"OFFSET", "LIMIT", "FETCH", "FOR", "WITH", "VALUES",
 			"RETURNING", "CROSS", "FULL", "INNER", "JOIN",
 			"LATERAL", "LEFT", "NATURAL", "OUTER", "RIGHT":
-			indents++
+			return indents + 1
 		}
 	case PLxBody:
 		switch cTok.AsUpper() {
-		case "IF", "CASE", "LOOP":
-			indents++
-		case "DECLARE", "BEGIN":
-			indents++
-		case "FOR":
-			indents++
-		case "WHEN", "THEN", "ELSE":
-			indents++
-		case "EXCEPTION":
-			indents++
+		case "DECLARE", "BEGIN", "IF", "CASE", "FOR", "LOOP", "WHEN", "THEN",
+			"ELSE", "EXCEPTION":
+			return indents + 1
 		}
 	}
 	return indents
@@ -403,6 +395,8 @@ func addInlineCaseBreaks(e *env.Env, bagType, indents, parensDepth, lineLen, idx
 						caseInd += 2
 						caseLen += len(strings.Repeat(e.Indent(), (*tokens)[idxStart-1].indents))
 					}
+				} else {
+					caseInd++
 				}
 			}
 		}
@@ -586,10 +580,11 @@ func wrapDMLCase(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				if tokens[idx].vSpace > 0 {
 					lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 					indents = calcIndent(bagType, tokens[idx])
-					switch tokens[idx].AsUpper() {
-					case "SELECT", "GROUP BY", "ORDER BY":
-						indents++
-					}
+					//switch tokens[idx].AsUpper() {
+					//case "GROUP BY", "ORDER BY":
+					////case "SELECT", "GROUP BY", "ORDER BY":
+					//	indents++
+					//}
 					ipd = 0
 				}
 			}
@@ -633,13 +628,27 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 		lineLen = calcLenToLineEnd(e, bagType, tokens)
 		indents = calcIndent(bagType, tokens[0])
 
-		switch tokens[0].AsUpper() {
-		case "SELECT":
-			indents++
-		}
+		//switch tokens[0].AsUpper() {
+		//case "SELECT":
+		//	indents++
+		//}
 	}
 
 	for idx := 0; idx <= idxMax; idx++ {
+
+		if tokens[idx].vSpace > 0 {
+			lineLen = calcLenToLineEnd(e, bagType, tokens)
+			indents = calcIndent(bagType, tokens[idx])
+			//if idx > 0 {
+			//	switch tokens[idx].AsUpper() {
+			//	case "SELECT":
+			//		indents++
+			//	case "WHERE", "ON":
+			//		indents--
+			//	}
+			//}
+		}
+
 		switch {
 		case isLogical(pKwVal, tokens[idx]):
 			lCnt++
@@ -675,8 +684,10 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 						ipd--
 					default:
 						if isLogical(pkv, tokens[i]) {
-							tokens[i].EnsureVSpace()
-							tokens[i].indents = indents + ipd + 1
+							if tokens[i].vSpace == 0 {
+								tokens[i].EnsureVSpace()
+								tokens[i].indents = indents + ipd + 1
+							}
 						}
 					}
 
