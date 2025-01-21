@@ -374,6 +374,16 @@ func consolidateDatatypes(e *env.Env, tokens []FmtToken) []FmtToken {
 			cTok.value = dts
 			cTok.categoryOf = parser.Datatype
 			cTok.typeOf = parser.Datatype
+
+			for i := idx + 1; i < idx+dtLen; i++ {
+				if len(tokens[i].ledComments) > 0 {
+					cTok.AddTrailingComment(tokens[i].ledComments...)
+				}
+				if len(tokens[i].trlComments) > 0 {
+					cTok.AddTrailingComment(tokens[i].trlComments...)
+				}
+			}
+
 			idx += dtLen - 1
 		}
 		ret = append(ret, cTok)
