@@ -328,6 +328,9 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 	// A work in progress...
 	// Order matters but may be/is probably context specific...
 	// Maybe consider the original vSpace for operators
+
+	tokens = wrapOnParens(e, bagType, mxPd, tokens)
+
 	for pdl := 0; pdl <= mxPd; pdl++ {
 
 		tokens = wrapOnCommas(e, bagType, pdl, tokens)
@@ -999,7 +1002,7 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 	ptVal := ""
 	cCnt := 0
 	wrapOnOpenParens := false
-	debug := false
+	debug := true
 	disableWrapping := false
 	isWindowFunction := false
 
@@ -1369,6 +1372,122 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 		}
 	}
 
+	return tokens
+}
+
+func wrapOnParens(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
+
+	// wrap on open parens
+	// for DML and PL only?
+	// for each line (vspace)
+	// scan the line until the 1/3 of maxLineLength point??? or not
+	// if the remainder of the line is < maxLineLength then wrap on the parens
+	// ... provided that the wrapped line is still < maxLineLength when considering the indents on the new line
+
+	//   select coalesce ( func_01 ( ... ), func_02 ( ... ) ) ;
+	//   vs.
+	//   select coalesce ( func_01 ( func_02 ( func_03 ( ... ) ) ) ) ;
+
+	switch bagType {
+	case DMLBag, PLxBody:
+		// nada
+	default:
+		return tokens
+	}
+	if len(tokens) == 0 {
+		return tokens
+	}
+	if mxPd < 2 {
+		return tokens
+	}
+
+	idxMax := len(tokens) - 1
+	idxStart := 0
+	indents := 0
+	lineLen := 0
+	pCnt := 0
+	oCnt := 0
+	parensDepth := 0
+	pdStart := 0
+
+	for idx := 0; idx < idxMax; idx++ {
+
+		doWrap := false
+		if tokens[idx+1].vSpace > 0 {
+
+			// is the current line too long?
+			// are there any open parens in the currentline?
+			switch {
+			case lineLen < e.MaxLineLength():
+				// nada
+			case pCnt < 1:
+				// nada
+			default:
+				doWrap = true
+			}
+		}
+
+		if doWrap {
+			idxBreak := 0
+			pd := pdStart
+			pdBreak := 0
+			segLen := 0
+
+			for i := idxStart; i <= idx; i++ {
+				segLen += calcLen(e, tokens[i])
+				switch tokens[i].value {
+				case "(":
+					pd++
+					pdLen := len(strings.Repeat(e.Indent(), pd))
+
+					switch {
+					case oCnt > 0:
+						// nada
+					case segLen > e.MaxLineLength():
+						// nada
+					case lineLen-segLen+pdLen > e.MaxLineLength():
+						// nada
+					// case pd < pdBreak: ???
+					// that is, go for the highest parens depth that satisfies, or not
+					case idxBreak > 0:
+						// nada
+					default:
+						idxBreak = i + 1
+						pdBreak = pd
+					}
+
+				case ")":
+					pd--
+				}
+			}
+
+			if idxBreak > 0 {
+				tokens[idxBreak].EnsureVSpace()
+				tokens[idxBreak].AdjustIndents(indents + pdBreak)
+			}
+		}
+
+		switch tokens[idx].value {
+		case "(":
+			parensDepth++
+			pCnt++
+		case ")":
+			parensDepth--
+		}
+
+		if isOperator(0, tokens[idx]) {
+			oCnt++
+		}
+
+		if tokens[idx].vSpace > 0 {
+			lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+			indents = calcIndent(bagType, tokens[idx])
+			idxStart = idx
+			pdStart = parensDepth
+			pCnt = 0
+			oCnt = 0
+		}
+	}
 	return tokens
 }
 
