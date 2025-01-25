@@ -266,8 +266,18 @@ func (p *Parser) tokenizeChunk(stmts string) ([]Token, error) {
 		}
 
 		// Special punctuation
-		switch chr {
-		case "(", ")", ",", ";":
+		var pts = map[string]int{
+			"(": OpenParen,
+			")": CloseParen,
+			"[": OpenBracket,
+			"]": CloseBracket,
+			"{": OpenBrace,
+			"}": CloseBrace,
+			",": Comma,
+			";": SemiColon,
+		}
+
+		if pt, ok := pts[chr]; ok {
 
 			if qi > iStart {
 				nt, err := NewToken(string(stmts[iStart:qi]), tType)
@@ -277,35 +287,11 @@ func (p *Parser) tokenizeChunk(stmts string) ([]Token, error) {
 				tlRe = append(tlRe, nt)
 			}
 
-			switch chr {
-			case "(":
-				nt, err := NewToken(chr, OpenParen)
-				if err != nil {
-					return tlRe, err
-				}
-				tlRe = append(tlRe, nt)
-
-			case ")":
-				nt, err := NewToken(chr, CloseParen)
-				if err != nil {
-					return tlRe, err
-				}
-				tlRe = append(tlRe, nt)
-
-			case ",":
-				nt, err := NewToken(chr, Comma)
-				if err != nil {
-					return tlRe, err
-				}
-				tlRe = append(tlRe, nt)
-
-			case ";":
-				nt, err := NewToken(chr, SemiColon)
-				if err != nil {
-					return tlRe, err
-				}
-				tlRe = append(tlRe, nt)
+			nt, err := NewToken(chr, pt)
+			if err != nil {
+				return tlRe, err
 			}
+			tlRe = append(tlRe, nt)
 
 			iStart = qi + 1
 			if iStart <= qiMax && p.isWhiteSpaceChar(string(stmts[iStart])) {

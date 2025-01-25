@@ -48,6 +48,10 @@ const (
 	//
 	OpenParen
 	CloseParen
+	OpenBracket
+	CloseBracket
+	OpenBrace
+	CloseBrace
 	Comma
 	SemiColon
 	//
@@ -179,6 +183,10 @@ func (t *Token) SetType(tt int) error {
 		t.categoryOf = tt
 	case OpenParen,
 		CloseParen,
+		OpenBracket,
+		CloseBracket,
+		OpenBrace,
+		CloseBrace,
 		Comma,
 		SemiColon:
 		t.typeOf = tt
@@ -227,6 +235,10 @@ func (t *Token) name(i int) string {
 		BindParameter:    "BindParameter",
 		OpenParen:        "OpenParen",
 		CloseParen:       "CloseParen",
+		OpenBracket:      "OpenBracket",
+		CloseBracket:     "CloseBracket",
+		OpenBrace:        "OpenBrace",
+		CloseBrace:       "CloseBrace",
 		Comma:            "Comma",
 		SemiColon:        "SemiColon",
 		Datatype:         "Datatype",
