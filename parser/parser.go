@@ -101,50 +101,104 @@ func (p *Parser) tokenizeStatement(stmts string) ([]Token, error) {
 		// commands and store the data as single tokens as they don't require,
 		// and would probably get corrupted by, any further parsing.
 		cpDS := regexp.MustCompile(`(?i)COPY\s*[^\(]+\([^\)]+\)\s+FROM\s+stdin\s*;`)
-		cpDE := regexp.MustCompile(`[\r\n]+\\.`)
+		cpDE := regexp.MustCompile(`[\r\n]+\\\.`)
+
+		// If the input is for PostgreSQL then find any psql backslash commands
+		pCmd := regexp.MustCompile(`^\\[^\r\n]+`)
+		pC2 := regexp.MustCompile(`[\r\n]\s*(\\[^\r\n]+)`)
+
 		remainder := stmts
 		for len(remainder) > 0 {
 
 			sm := cpDS.FindStringIndex(remainder)
 			em := cpDE.FindStringIndex(remainder)
+			sp := pCmd.FindStringIndex(remainder)
+			sp2 := pC2.FindSubmatchIndex([]byte(remainder))
 
-			fromIdx := 0
-			toIdx := 0
+			dsIdx := -1
+			deIdx := -1
+			psIdx := -1
 
 			if sm != nil {
-				fromIdx = sm[1]
+				dsIdx = sm[1]
 			}
 			if em != nil {
-				toIdx = em[1]
+				deIdx = em[1]
 			}
 
-			if fromIdx > 0 && toIdx > 0 && toIdx > fromIdx {
+			if sp != nil {
+				// the remainder starts with a backslash command
+				psIdx = sp[0]
+			} else if sp2 != nil {
+				// the remainder contains a backslash command
+				psIdx = sp2[0]
+			}
 
-				ts, err := p.tokenizeChunk(remainder[:fromIdx])
+			if psIdx >= 0 && (dsIdx < 0 || psIdx < dsIdx) {
+				// there was a psql backslash command found first
+
+				ts, err := p.tokenizeChunk(remainder[:psIdx])
+				if err != nil {
+					return tlRe, err
+				}
+				tlRe = append(tlRe, ts...)
+
+				if len(sp) > 1 {
+					//
+					nt, err := NewToken(string(remainder[sp[0]:sp[1]]), Data)
+					if err != nil {
+						return tlRe, err
+					}
+					tlRe = append(tlRe, nt)
+
+					remainder = remainder[sp[1]:]
+
+				} else if len(sp2) > 3 {
+					// sp2 == [
+					// 0: index start,
+					// 1: index end,
+					// 2: index capture start,
+					// 3: index capture end
+					// ]
+					nt, err := NewToken(string(remainder[sp2[2]:sp2[3]]), Data)
+					if err != nil {
+						return tlRe, err
+					}
+					nt.SetLeadingSpace(string(remainder[sp2[0]:sp2[2]]))
+
+					tlRe = append(tlRe, nt)
+
+					remainder = remainder[sp2[3]:]
+				} else {
+					return tlRe, errors.New("Failure extracting psql commands. This should not have happened")
+				}
+
+			} else if dsIdx >= 0 && deIdx > dsIdx {
+				// there was a copy command found first
+
+				ts, err := p.tokenizeChunk(remainder[:dsIdx])
 				if err != nil {
 					return tlRe, err
 				}
 
 				tlRe = append(tlRe, ts...)
 
-				nt, err := NewToken(string(remainder[fromIdx:toIdx]), Data)
+				nt, err := NewToken(string(remainder[dsIdx:deIdx]), Data)
 				if err != nil {
 					return tlRe, err
 				}
 
 				tlRe = append(tlRe, nt)
 
-				remainder = remainder[toIdx:]
+				remainder = remainder[deIdx:]
 
 			} else {
 
 				if len(remainder) > 0 {
-
 					ts, err := p.tokenizeChunk(remainder)
 					if err != nil {
 						return tlRe, err
 					}
-
 					tlRe = append(tlRe, ts...)
 				}
 				remainder = ""
