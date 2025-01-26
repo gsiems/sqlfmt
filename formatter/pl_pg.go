@@ -831,8 +831,13 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			// nada
 		case cTok.IsKeyword():
 			cTok.fbp = true
-		case ptVal == ";":
+		case pTok.IsKeyword():
 			cTok.fbp = true
+		default:
+			switch ptVal {
+			case "THEN", ";":
+				cTok.fbp = true
+			}
 		}
 
 		// Set the previous keyword value

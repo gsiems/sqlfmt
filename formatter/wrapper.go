@@ -2,7 +2,6 @@ package formatter
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/gsiems/sqlfmt/dialect"
@@ -18,9 +17,13 @@ const (
 	mathAddSubOps
 	mathMultDivOps
 	winFuncOps
+	wrapVertical
+	wrapHorizontal
+	wrapHybrid
+	wrapNone
 )
 
-func opsName(i int) string {
+func wrapsName(i int) string {
 	var names = map[int]string{
 		compareOps:     "compareOps",
 		concatOps:      "concatOps",
@@ -29,6 +32,10 @@ func opsName(i int) string {
 		mathAddSubOps:  "mathAddSubOps",
 		mathMultDivOps: "mathMultDivOps",
 		winFuncOps:     "winFuncOps",
+		wrapVertical:   "wrapVertical",
+		wrapHorizontal: "wrapHorizontal",
+		wrapHybrid:     "wrapHybrid",
+		wrapNone:       "wrapNone",
 	}
 
 	if tName, ok := names[i]; ok {
@@ -59,12 +66,12 @@ func calcIndent(bagType int, cTok FmtToken) int {
 		}
 	case DMLBag:
 		switch cTok.AsUpper() {
-		case "SELECT", "INSERT":
+		case "SELECT", "INSERT", "FOR":
 			return indents + 2
 		case "FROM", "GROUP BY", "WHERE", "HAVING", "WINDOW", "ORDER BY",
-			"OFFSET", "LIMIT", "FETCH", "FOR", "WITH", "VALUES",
-			"RETURNING", "CROSS", "FULL", "INNER", "JOIN",
-			"LATERAL", "LEFT", "NATURAL", "OUTER", "RIGHT":
+			"OFFSET", "LIMIT", "FETCH", "WITH", "VALUES", "RETURNING", "CROSS",
+			"FULL", "INNER", "JOIN", "LATERAL", "LEFT", "NATURAL", "OUTER",
+			"RIGHT":
 			return indents + 1
 		}
 	case PLxBody:
@@ -162,68 +169,17 @@ func calcLenToLineEnd(e *env.Env, bagType int, tokens []FmtToken) int {
 	sliceLen := 0
 
 	for idx := 0; idx <= idxMax; idx++ {
-		if tokens[idx].vSpace > 0 && idx > 0 {
-			return sliceLen
+		if idx > 0 {
+			if tokens[idx].vSpace > 0 {
+				return sliceLen
+			}
+			if bagType == CommentOnBag && tokens[idx-1].AsUpper() == "IS" {
+				return sliceLen
+			}
 		}
 		sliceLen += calcLen(e, tokens[idx])
 	}
 	return sliceLen
-}
-
-func validateWhitespacing(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
-	// TODO
-	return tokens
-	// line feeds after leading comments
-	// line feeds after trailing comments of previous tokens
-	// sub-select dropping last token
-	// closing parens wrapping dml bag
-	// window function indentation
-	// wrap pl call doesn't wrap if there's a commented line
-
-	indents := 0
-	lpd := 0
-	idxMax := len(tokens) - 1
-	//var pTok FmtToken
-	//	lIndent := 0
-
-	//log.Printf("validateWhitespacing %d ##########################", tokens[0].id)
-
-	for idx := 0; idx <= idxMax; idx++ {
-
-		if tokens[idx].vSpace > 0 {
-			indents = calcIndent(bagType, tokens[idx])
-			lpd = 0
-
-		}
-
-		switch tokens[idx].value {
-		case "(":
-			lpd++
-		case ")":
-			lpd--
-		}
-
-		if len(tokens[idx].ledComments) > 0 {
-
-			tokens[idx].EnsureVSpace()
-			if tokens[idx].indents == 0 {
-				tokens[idx].AdjustIndents(indents + lpd)
-			}
-		}
-
-		if idx > 0 {
-			if len(tokens[idx-1].trlComments) > 0 {
-				tokens[idx].EnsureVSpace()
-				if tokens[idx].indents == 0 {
-					tokens[idx].AdjustIndents(indents + lpd)
-				}
-			}
-		}
-
-		//pTok = tokens[idx]
-	}
-
-	return tokens
 }
 
 func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
@@ -329,16 +285,22 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 	// Order matters but may be/is probably context specific...
 	// Maybe consider the original vSpace for operators
 
-	tokens = wrapOnParens(e, bagType, mxPd, tokens)
+	for pdl := 0; pdl <= mxPd; pdl++ {
+		tokens = wrapOnCommasY(e, bagType, pdl, tokens)
+	}
 
 	for pdl := 0; pdl <= mxPd; pdl++ {
 
-		tokens = wrapOnCommas(e, bagType, pdl, tokens)
+		tokens = wrapOnCommasX(e, bagType, pdl, tokens)
 		tokens = wrapOnCompOps(e, bagType, pdl, tokens)
 		tokens = wrapOnMathOps(e, bagType, pdl, tokens)
 		tokens = wrapOnConcatOps(e, bagType, pdl, tokens)
 
 	}
+	//for pdl := 0; pdl <= mxPd; pdl++ {
+	//	tokens = wrapOnParens(e, bagType, pdl, tokens)
+	//}
+
 	return tokens
 }
 
@@ -509,6 +471,9 @@ func addInlineCaseBreaks(e *env.Env, bagType, indents, parensDepth, lineLen, idx
 						switch ctVal {
 						case "THEN":
 							idxThen = j
+							if (*tokens)[idxThen].vSpace > 0 {
+								(*tokens)[idxThen].indents = caseInd + 1
+							}
 						case "WHEN", "ELSE":
 							if idxThen > 0 {
 								if whenLen > e.MaxLineLength() {
@@ -957,334 +922,453 @@ func wrapInto(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	return tokens
 }
 
-func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
+// isNotCsvWrappable checks a token value to determine if it should prevent
+// wrapping via wrapOnCommasX or wrapOnCommasY
+func isCsvWrappable(e *env.Env, v string) bool {
 
-	/*
-	   LINE       => the set of tokens passed into the wrap function
-	   line       => a set of tokens bounded by vSpaces or LINE boundaries
-	   parens set => a pair of matching open/close parens and the tokens contained therein
-	   pSetLen    => length of tokens within a parens set
-	   lSegLen    => the length of tokens starting from the last vSpace to the next vSpace (or end of LINE)
-	   lCurLen    => the length of tokens starting from the last vSpace to the current token
-	   lRemLen    => the length of tokens from the current token to the next vSpace (or end of LINE)
+	switch strings.ToUpper(v) {
+	case "ORDER BY", "GROUP BY", "PARTITION BY":
+		// s.b. wrapped by wrapDMLWindowFunctions
+		return false
+	case "=>":
+		// s.b. wrapped by wrapPLxCalls
+		return false
+	case "VALUES":
+		// s.b. wrapped by wrapValueTuples
+		return false
+	case "DECODE", "JSON_BUILD_OBJECT":
+		// s.b. wrapped by wrapOnMod2Commas
+		return false
+	}
+	return true
+}
 
-	   for each pdl from 0 => maxParensDepth
+// isWrapPrefixKw determines if the supplied token is a valid "prefix keyword"
+// for the purposes of wrapping lists of elements via wrapOnCommasX or
+// wrapOnCommasY
+func isWrapPrefixKw(e *env.Env, pdl, parensDepth int, t FmtToken) bool {
+	if (pdl == 0 && parensDepth == 0) || parensDepth < pdl {
+		switch {
+		case t.IsKeyword():
+			return true
+		case t.value == ":=":
+			return true
+		case e.Dialect() == dialect.PostgreSQL:
+			switch t.AsUpper() {
+			case "CALL", "PERFORM", "FORMAT", "RETURNING", "ROW", "AS",
+				"CONCAT_WS", "CONCAT", "JSON_POPULATE_RECORDSET":
+				return true
+			}
+		}
+	}
+	return false
+}
 
-	       - check commas, then comparison ops, then math ops, and finally concatenation ops
+// csvWrapMode determines what mode of wrapping to be implemented by
+// wrapOnCommasX and wrapOnCommasY (defaults to horizontal (x))
+func csvWrapMode(e *env.Env, v string) int {
 
-	       - for each parens set for the pdl
+	switch strings.ToUpper(v) {
+	case "RETURNING", "ROW", "INTO", "FOR", "AS":
+		//, "CONCAT_WS", "CONCAT", "COALESCE":
+		return wrapHybrid
+	case "CALL", "PERFORM", "JSON_POPULATE_RECORDSET":
+		return wrapVertical
+	default:
+		if !isCsvWrappable(e, v) {
+			return wrapNone
+		}
+	}
+	return wrapHorizontal
+}
 
-	           - when checking commas
-
-	               - if the lSegLen < MaxLineLength then skip the current parens set
-	               - if there are any fat-commas then skip the current parens set
-	               - if is part of JSON_BUILD_OBJECT then skip the current parens set
-	               - if is preceded by IN then wrap at length (as needed)
-	               - If is part of DCL or DDL then wrap at length (as needed)
-
-	*/
+func wrapOnCommasX(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 
 	if len(tokens) == 0 {
 		return tokens
 	}
 
-	idxLineStart := 0
+	cCnt := 0
 	idxMax := len(tokens) - 1
+	idxLineStart := 0
 	idxStart := 0
-	idxEnd := 0
 	indents := 0
-	formatTokens := true
 	parensDepth := 0
 	pKwVal := ""
-	ppKwVal := ""
-	wrapOnLength := false
-	lSegLen := 0
-	ptVal := ""
-	cCnt := 0
-	wrapOnOpenParens := false
-	debug := true
-	disableWrapping := false
-	isWindowFunction := false
+	wrapMode := wrapHorizontal
+	debug := false
 
-	if debug {
-		log.Printf("wrapOnCommas bagType: %s, pdl: %d, len(tokens): %d", nameOf(bagType), pdl, len(tokens))
-	}
+	carp(debug, fmt.Sprintf("wrapOnCommasX    pdl: %d", pdl))
 
-	// RAISE NOTICE etc. wrap on length???
-
-	if pdl == 0 {
-		lineLen := calcLenToLineEnd(e, bagType, tokens)
-
-		for idx := 0; idx <= idxMax; idx++ {
-
-			if tokens[idx].vSpace > 0 {
-				indents = calcIndent(bagType, tokens[idx])
-				lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
-			}
-
-			switch tokens[idx].value {
-			case "(":
-				parensDepth++
-			case ")":
-				parensDepth--
-			default:
-				if idx > 0 && parensDepth == pdl && lineLen > e.MaxLineLength() {
-					switch tokens[idx-1].value {
-					case ",":
-						if tokens[idx].vSpace == 0 {
-							tokens[idx].EnsureVSpace()
-							tokens[idx].AdjustIndents(indents + parensDepth + 1)
-							lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
-						}
-					}
-				}
-			}
-		}
-		return tokens
-	}
-
-	// pdl is > 0 /////////////////////////////////////////////////////////////
 	for idx := 0; idx <= idxMax; idx++ {
 
-		addBreaks := false
-		doCheck := false
-
-		if parensDepth < pdl {
+		if (pdl == 0 && parensDepth == 0) || parensDepth < pdl {
 			if tokens[idx].vSpace > 0 {
 				indents = calcIndent(bagType, tokens[idx])
 				idxLineStart = idx
+				idxStart = idx
 			}
 		}
 
-		switch tokens[idx].value {
+		carp(debug, fmt.Sprintf("    %d - %s", idx, tokens[idx].String()))
+
+		switch tokens[idx].AsUpper() {
 		case "(":
 			parensDepth++
-
 			if parensDepth == pdl {
-				cCnt = 0
+				wrapMode = csvWrapMode(e, pKwVal)
 				idxStart = idx
-
-				if idx > 0 {
-					ptVal = tokens[idx-1].AsUpper()
-				} else {
-					ptVal = ""
-				}
-
-				switch pKwVal {
-				case "VALUES":
-					// taken care of by wrapValueTuples
-					disableWrapping = true
-				case "INTO", "INSERT":
-					wrapOnOpenParens = true
-				case "ORDER BY", "GROUP BY", "PARTITION BY":
-					isWindowFunction = true
-				case "CALL", "PERFORM", "ROW":
-					if e.Dialect() == dialect.PostgreSQL {
-						wrapOnOpenParens = true
-					}
-				}
-
-				switch {
-				case isWindowFunction:
-					wrapOnLength = true
-				case ppKwVal == "INSERT" && pKwVal == "INTO":
-					formatTokens = false
-				case ptVal == "JSON_BUILD_OBJECT":
-					formatTokens = false
-				case ptVal == "DECODE":
-					formatTokens = false
-				case ptVal == "IN":
-					wrapOnLength = true
-
-				default:
-					switch bagType {
-					case DDLBag, DCLBag, CommentOnBag:
-						wrapOnLength = true
-					}
-				}
-				if wrapOnLength {
-					wrapOnOpenParens = true
-				}
+				cCnt = 0
 			}
 		}
 
-		// if we are in the pdl AND there are commas within the pdl prior to the current token,
-		// AND if we hit a vSpace AND the line up to this point is too long THEN wrap
-		// OR we hit the pdl end AND the line up to this point is too long is too long then wrap
-
-		// if idxStart is less than idxLineStart then wrap starting at the idxLineStart
-		// if idxStart is greater than idxLineStart then wrap starting at the idxStart
-
-		switch tokens[idx].value {
-		case ",":
-			if parensDepth == pdl {
+		if parensDepth == pdl {
+			doCheck := false
+			switch tokens[idx].AsUpper() {
+			case ")", ";", "IN":
+				doCheck = true
+			case ",":
 				cCnt++
-			}
-		case "=>":
-			if parensDepth == pdl {
-				formatTokens = false
-			}
-		case ";":
-			disableWrapping = false
-		case ")":
-			switch {
-			case parensDepth == pdl:
-				doCheck = !disableWrapping
-			case parensDepth < pdl:
-				disableWrapping = false
-				isWindowFunction = false
-				wrapOnOpenParens = false
-				wrapOnLength = false
-				formatTokens = true
-			}
-		}
 
-		if doCheck {
-			idxEnd = idx
-			lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxEnd])
-			if debug {
-				log.Printf("    %d        doCheck tokens[%d]: id: %d, idxLineStart: %d, idxStart: %d, idxEnd: %d, cCnt: %d [%s]", tokens[0].id, idx, tokens[idx].id, idxLineStart, idxStart, idxEnd, cCnt, tokens[idx].value)
-				log.Printf("    %d        doCheck cCnt: %d, lSegLen: %d, formatTokens: %t", tokens[0].id, cCnt, lSegLen, formatTokens)
-			}
-			addBreaks = false
-			if formatTokens && cCnt > 0 {
-				lSegLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxEnd]) + 1
+				if cCnt == 1 {
+					switch pKwVal {
+					case "AS":
+						indents++
+					}
+				}
 
-				//lineLen := calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+			default:
+				switch idx {
+				case idxMax:
+					doCheck = true
+				default:
+					if tokens[idx+1].vSpace > 0 {
+						doCheck = true
+					}
+				}
+
+				if wrapMode != wrapNone && !isCsvWrappable(e, tokens[idx].value) {
+					wrapMode = wrapNone
+				}
 				switch {
-				case lSegLen > e.MaxLineLength():
-					addBreaks = true
-					//case lineLen > e.MaxLineLength():
-					//addBreaks = true
+				case idx == idxMax:
+					doCheck = true
+				case tokens[idx+1].vSpace > 0:
+					doCheck = true
 				}
 			}
 
-			if debug {
-				log.Printf("    %d        doCheck addBreaks: %t", tokens[0].id, addBreaks)
+			doWrap := false
+			if doCheck {
+				segLen := calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+				switch wrapMode {
+				case wrapHorizontal:
+					doWrap = cCnt > 0 && segLen > e.MaxLineLength()
+				}
+
+				carp(debug, fmt.Sprintf("    doCheck idxStart: %d, idx: %d, cCnt: %d, segLen: %d, pKwVal: %s, wrapMode: %s:, doWrap: %t",
+					idxStart, idx, cCnt, segLen, pKwVal, wrapsName(wrapMode), doWrap))
+
 			}
-		}
 
-		if addBreaks {
+			if doWrap {
+				ipd := 0
+				var ixs []int
 
-			if wrapOnLength {
-				tpl := calcSliceLen(e, bagType, tokens[idxLineStart:idxStart+1])
-				tpd := pdl
-				for i := idxStart + 1; i < idxEnd; i++ {
+				// gather the token indexes to potentially wrap on
+				for i := idxStart + 1; i <= idx; i++ {
 					switch tokens[i].value {
 					case "(":
-						tpd++
+						ipd++
 					case ")":
-						tpd--
-					default:
-						if tpd != pdl {
-							continue
-						}
-						// if the previous was a comma, or was the start,
-						// then scan ahead to find the next comma where
-						// tpd == pdl (or the closing parens that drops
-						// below pdl). If the length between goes over the
-						// limit then add a vSpace to the current token.
-
-						if i != idxStart+1 && tokens[i-1].value != "," {
-							continue
-						}
-
-						jpd := pdl
-						jdone := false
-
-						for j := i + 1; j < idxEnd; j++ {
-							if jdone {
-								break
-							}
-							switch tokens[j].value {
-							case "(":
-								jpd++
-
-								if jpd == pdl && wrapOnOpenParens {
-									tokens[i].EnsureVSpace()
-									tokens[i].AdjustIndents(indents + pdl)
-								}
-
-							case ")":
-								jpd--
-							default:
-								if jpd != pdl {
-									continue
-								}
-								if j+1 != idxEnd && tokens[j-1].value != "," {
-									continue
-								}
-								nl := calcSliceLen(e, bagType, tokens[i:j])
-
-								if tpl+nl > e.MaxLineLength() {
-									tokens[i].EnsureVSpace()
-									tokens[i].AdjustIndents(indents + pdl)
-									tpl = 0
-								}
-								jdone = true
-							}
-							tpl += calcLen(e, tokens[i]) + 1
-						}
-					}
-				}
-
-				// determine if it is necessary to wrap the closing parens
-				wrapOnCloseParens := false
-				switch bagType {
-				case CommentOnBag, DCLBag:
-					wrapOnCloseParens = true
-				case DDLBag:
-					isAlter := tokens[0].AsUpper() == "ALTER"
-
-					isOwner := false
-					for _, ct := range tokens {
-						switch ct.AsUpper() {
-						case "OWNER":
-							isOwner = true
-						}
-					}
-					wrapOnCloseParens = isAlter && isOwner
-
-				}
-				if wrapOnCloseParens {
-					tls := 0
-					for i, ct := range tokens {
-						if ct.vSpace > 0 {
-							tls = i
-						}
+						ipd--
 					}
 
-					ll := calcLenToLineEnd(e, bagType, tokens[tls:])
-					if ll > e.MaxLineLength() {
-						tokens[idxEnd].EnsureVSpace()
-						tokens[idxEnd].AdjustIndents(indents + pdl - 1)
-					}
-				}
-
-			} else {
-
-				tpd := pdl
-
-				for i := idxStart + 1; i < idxEnd; i++ {
-
-					switch tokens[i].value {
-					case "(":
-						tpd++
-					case ")":
-						tpd--
-					default:
-						if tpd == pdl {
-
-							// wrapOnOpenParens
+					if ipd == 0 {
+						if i == idxStart+1 {
+							ixs = append(ixs, i)
+						} else {
 							switch tokens[i-1].value {
 							case ",":
+								ixs = append(ixs, i)
+							}
+						}
+					}
+				}
+				// wrap
+				addBreak := false
+				segLen := 0
+
+				// 1-- wrap after the open parens as needed
+				switch {
+				//				case bagType == CommentOnBag :
+				//					segLen = calcSliceLen(e, bagType, tokens[idxLineStart:idx])
+				//if segLen > e.MaxLineLength() {
+				//	addBreak = true
+				//}
+				case idxLineStart == idxStart:
+					segLen = calcLen(e, tokens[idxStart])
+				case idxLineStart > idxStart:
+					segLen = calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+				default:
+					segLen = calcSliceLen(e, bagType, tokens[idxLineStart:idxStart])
+				}
+
+				if segLen > e.MaxLineLength() {
+					addBreak = true
+				} else {
+					switch pKwVal {
+					case "INTO", "INSERT", "IN":
+						addBreak = true
+					case "CALL", "PERFORM", "ROW":
+						if e.Dialect() == dialect.PostgreSQL {
+							addBreak = true
+						}
+					}
+				}
+
+				carp(debug, fmt.Sprintf("        1) - segLen: %d, addBreak: %t - %s",
+					segLen, addBreak, tokens[idx].String()))
+
+				//if addBreak {
+				//	tokens[idxStart].EnsureVSpace()
+				//	tokens[idxStart].AdjustIndents(indents + pdl)
+				//}
+
+				// 2-- wrap just before the length exceeds the max line length
+				lineLen := calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+				if lineLen > e.MaxLineLength() {
+					breakCount := 0
+
+					iMax := len(ixs) - 1
+					for i := 0; i <= iMax; i++ {
+						ix := ixs[i]
+						nLen := 0
+						segLen = 0
+						switch {
+						case idxLineStart == ix:
+							segLen = calcLen(e, tokens[idxStart])
+						case idxLineStart > ix:
+							segLen = calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+						default:
+							segLen = calcSliceLen(e, bagType, tokens[idxLineStart:ix])
+						}
+
+						addBreak = false
+
+						carp(debug, fmt.Sprintf("        2a) - i: %d, ix: %d, segLen: %d - %s",
+							i, ix, segLen, tokens[ix].String()))
+
+						if segLen > e.MaxLineLength() {
+							addBreak = true
+						} else {
+							ixN := 0
+							if i < iMax {
+								ixN = ixs[i+1]
+								nLen = calcSliceLen(e, bagType, tokens[ix:ixN])
+							} else {
+								nLen = calcSliceLen(e, bagType, tokens[ix:idx])
+							}
+
+							if segLen+nLen > e.MaxLineLength() {
+								addBreak = true
+							}
+						}
+
+						carp(debug, fmt.Sprintf("        2a) - i: %d, ix: %d, segLen: %d, nLen: %d, addBreak: %t",
+							i, ix, segLen, nLen, addBreak))
+
+						if addBreak {
+							breakCount++
+							tokens[ix].EnsureVSpace()
+							tokens[ix].AdjustIndents(indents + pdl)
+							idxLineStart = ix
+						}
+					}
+
+					if breakCount == 0 {
+						// no breaks added... try scanning to the first comma that
+						// can split the line into two portions that are both less
+						// than the max line length
+						lineLen := calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+						pdLen := len(strings.Repeat(e.Indent(), indents+pdl))
+
+						carp(debug, fmt.Sprintf("        2b) - lineLen: %d, pdLen: %d",
+							lineLen, pdLen))
+
+						for i := 0; i <= iMax; i++ {
+							if breakCount > 0 {
+								break
+							}
+
+							ix := ixs[i]
+							remLen := calcLenToLineEnd(e, bagType, tokens[ix:])
+
+							carp(debug, fmt.Sprintf("        2b) - i: %d, ix: %d, remLen: %d",
+								i, ix, remLen))
+
+							switch {
+							//case bagType == CommentOnBag :
+							// nada
+							case lineLen <= e.MaxLineLength():
+								// nada
+							case pdLen+remLen > e.MaxLineLength():
+								// nada
+							case lineLen-remLen > e.MaxLineLength():
+								// nada
+							default:
+								tokens[ix].EnsureVSpace()
+								tokens[ix].AdjustIndents(indents + pdl)
+								idxLineStart = ix
+								breakCount++
+							}
+						}
+					}
+				}
+
+				// 3-- wrap before the close parens as needed
+				addBreak = false
+				segLen = calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+				if segLen > e.MaxLineLength() {
+					switch {
+					case bagType == CommentOnBag:
+						// nada
+					case idxMax-idx <= 3:
+						// nada
+					default:
+						addBreak = true
+					}
+				}
+
+				carp(debug, fmt.Sprintf("        3) - segLen: %d, addBreak: %t",
+					segLen, addBreak))
+
+				if addBreak {
+					tokens[idx].EnsureVSpace()
+					tokens[idx].AdjustIndents(indents + pdl)
+					idxLineStart = idx
+				}
+			}
+		}
+
+		switch tokens[idx].value {
+		case ")":
+			if parensDepth == pdl {
+				cCnt = 0
+			}
+			parensDepth--
+		case ";", "IN":
+			cCnt = 0
+		}
+
+		if isWrapPrefixKw(e, pdl, parensDepth, tokens[idx]) {
+			pKwVal = tokens[idx].AsUpper()
+		}
+
+	}
+	return tokens
+}
+
+func wrapOnCommasY(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
+
+	if len(tokens) == 0 {
+		return tokens
+	}
+
+	cCnt := 0
+	idxMax := len(tokens) - 1
+	idxStart := 0
+	idxLineStart := 0
+	indents := 0
+	//lineLength := 0
+	parensDepth := 0
+	pKwVal := ""
+	wrapMode := wrapVertical
+	debug := false
+	carp(debug, fmt.Sprintf("wrapOnCommasY    pdl: %d", pdl))
+
+	for idx := 0; idx <= idxMax; idx++ {
+
+		if (pdl == 0 && parensDepth == 0) || parensDepth < pdl {
+			if tokens[idx].vSpace > 0 {
+				indents = calcIndent(bagType, tokens[idx])
+				//lineLength = calcLenToLineEnd(e, bagType, tokens[idx:])
+				idxLineStart = idx
+				idxStart = idx
+			}
+		}
+
+		carp(debug, fmt.Sprintf("    %d - %s", idx, tokens[idx].String()))
+
+		switch tokens[idx].AsUpper() {
+		case "(":
+			parensDepth++
+			if parensDepth == pdl {
+				wrapMode = csvWrapMode(e, pKwVal)
+				idxStart = idx
+				cCnt = 0
+			}
+		}
+
+		if parensDepth == pdl {
+			doCheck := false
+			switch tokens[idx].AsUpper() {
+			case ")", ";", "IN":
+				doCheck = true
+			case ",":
+				cCnt++
+
+				if cCnt == 1 {
+					switch pKwVal {
+					case "AS":
+						indents++
+					}
+				}
+
+			default:
+				if wrapMode != wrapNone && !isCsvWrappable(e, tokens[idx].value) {
+					wrapMode = wrapNone
+				}
+				if idx == idxMax {
+					doCheck = true
+				}
+			}
+
+			doWrap := false
+			if doCheck {
+				//segLen := calcLenToLineEnd(e, bagType, tokens[idxStart:])
+				segLen := calcSliceLen(e, bagType, tokens[idxLineStart:idx]) + calcLenToLineEnd(e, bagType, tokens[idx:])
+				switch wrapMode {
+				case wrapVertical:
+					doWrap = cCnt > 0 && segLen > e.MaxLineLength()
+				case wrapHybrid:
+					doWrap = cCnt > 3 || segLen > e.MaxLineLength()
+				default:
+					switch pKwVal {
+					case "JSON_POPULATE_RECORDSET":
+						doWrap = cCnt > 0
+					}
+				}
+				carp(debug, fmt.Sprintf("    idxStart: %d, idx: %d, cCnt: %d, segLen: %d, pKwVal: %s, wrapMode: %s:, doWrap: %t",
+					idxStart, idx, cCnt, segLen, pKwVal, wrapsName(wrapMode), doWrap))
+			}
+
+			if doWrap {
+				ipd := 0
+				for i := idxStart + 1; i <= idx; i++ {
+					switch tokens[i].value {
+					case "(":
+						ipd++
+					case ")":
+						ipd--
+					}
+
+					if ipd == 0 {
+						switch tokens[i-1].value {
+						case "(", ",":
+							if tokens[i].vSpace == 0 {
 								tokens[i].EnsureVSpace()
-								tokens[i].AdjustIndents(indents + pdl)
-							case "(":
-								if wrapOnOpenParens {
-									tokens[i].EnsureVSpace()
-									tokens[i].AdjustIndents(indents + pdl)
-								}
+								tokens[i].AdjustIndents(indents + max(pdl-1, 1))
 							}
 						}
 					}
@@ -1296,45 +1380,34 @@ func wrapOnCommas(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 		case ")":
 			if parensDepth == pdl {
 				cCnt = 0
-				formatTokens = false
 			}
 			parensDepth--
+		case ";", "IN":
+			cCnt = 0
 		}
 
-		if pKwVal != "AS" {
-			switch {
-			case tokens[idx].IsKeyword():
-				ppKwVal = pKwVal
-				pKwVal = tokens[idx].AsUpper()
-			case tokens[idx].AsUpper() == "PERFORM":
-				if e.Dialect() == dialect.PostgreSQL {
-					ppKwVal = pKwVal
-					pKwVal = tokens[idx].AsUpper()
-				}
-			}
+		if isWrapPrefixKw(e, pdl, parensDepth, tokens[idx]) {
+			pKwVal = tokens[idx].AsUpper()
 		}
+
 	}
 	return tokens
 }
 
 func wrapOnCompOps(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
-	//log.Print("wrapOnCompOps")
 	return wrapOnOps(e, bagType, compareOps, pdl, tokens)
 }
 
 func wrapOnConcatOps(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
-	//log.Print("wrapOnConcatOps")
 	return wrapOnOps(e, bagType, concatOps, pdl, tokens)
 }
 
 func wrapOnMathOps(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
-	//log.Print("wrapOnMathOps")
 	tokens = wrapOnOps(e, bagType, mathAddSubOps, pdl, tokens)
 	return wrapOnOps(e, bagType, mathMultDivOps, pdl, tokens)
 }
 
 func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtToken {
-	//	log.Printf("wrapOnOps bagType: %s, opType: %s, pdl: %d", nameOf(bagType), opsName(opType), pdl)
 
 	if len(tokens) == 0 {
 		return tokens
@@ -1342,7 +1415,13 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 
 	idxMax := len(tokens) - 1
 	indents := 0
+	ipd := 0
 	parensDepth := 0
+	pKwVal := ""
+	debug := false
+
+	carp(debug, fmt.Sprintf("wrapOnParens    bagType: %s, opType: %s, pdl: %d",
+		nameOf(bagType), wrapsName(opType), pdl))
 
 	lineLen := calcLenToLineEnd(e, bagType, tokens)
 	if tokens[0].vSpace > 0 {
@@ -1352,13 +1431,17 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 	for idx := 0; idx <= idxMax; idx++ {
 		if idx > 0 && tokens[idx].vSpace > 0 {
 			lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
+			indents = tokens[idx].indents
+			ipd = 0
 		}
 
 		switch tokens[idx].value {
 		case "(":
 			parensDepth++
+			ipd++
 		case ")":
 			parensDepth--
+			ipd--
 		}
 
 		switch {
@@ -1367,15 +1450,32 @@ func wrapOnOps(e *env.Env, bagType, opType, pdl int, tokens []FmtToken) []FmtTok
 		case lineLen <= e.MaxLineLength():
 			// nada
 		case isOperator(opType, tokens[idx]):
-			tokens[idx].EnsureVSpace()
-			tokens[idx].AdjustIndents(indents + parensDepth + 1)
+
+			addBreak := true
+			switch pKwVal {
+			case "SET":
+				if tokens[idx].value == "=" {
+					if tokens[idx-1].value != ")" {
+						addBreak = false
+					}
+				}
+			}
+			if addBreak {
+				tokens[idx].EnsureVSpace()
+				tokens[idx].AdjustIndents(indents + ipd + 1)
+			}
+
+		}
+
+		if isWrapPrefixKw(e, pdl, parensDepth, tokens[idx]) {
+			pKwVal = tokens[idx].AsUpper()
 		}
 	}
 
 	return tokens
 }
 
-func wrapOnParens(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
+func wrapOnParens(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 
 	// wrap on open parens
 	// for DML and PL only?
@@ -1397,96 +1497,103 @@ func wrapOnParens(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 	if len(tokens) == 0 {
 		return tokens
 	}
-	if mxPd < 2 {
+	if pdl < 1 {
+		return tokens
+	}
+	if pdl > 3 {
 		return tokens
 	}
 
 	idxMax := len(tokens) - 1
-	idxStart := 0
+	idxLineStart := 0
 	indents := 0
-	lineLen := 0
-	pCnt := 0
-	oCnt := 0
 	parensDepth := 0
-	pdStart := 0
+	pKwVal := ""
+	wrapMode := wrapNone
+	debug := false
 
-	for idx := 0; idx < idxMax; idx++ {
+	carp(debug, fmt.Sprintf("wrapOnParens    pdl: %d", pdl))
 
-		doWrap := false
-		if tokens[idx+1].vSpace > 0 {
+	for idx := 0; idx <= idxMax; idx++ {
 
-			// is the current line too long?
-			// are there any open parens in the currentline?
-			switch {
-			case lineLen < e.MaxLineLength():
-				// nada
-			case pCnt < 1:
-				// nada
-			default:
-				doWrap = true
+		if !isCsvWrappable(e, tokens[idx].value) {
+			return tokens
+		}
+
+		if (pdl == 0 && parensDepth == 0) || parensDepth < pdl {
+			if tokens[idx].vSpace > 0 {
+				indents = calcIndent(bagType, tokens[idx])
+				idxLineStart = idx
 			}
 		}
 
-		if doWrap {
-			idxBreak := 0
-			pd := pdStart
-			pdBreak := 0
-			segLen := 0
-
-			for i := idxStart; i <= idx; i++ {
-				segLen += calcLen(e, tokens[i])
-				switch tokens[i].value {
-				case "(":
-					pd++
-					pdLen := len(strings.Repeat(e.Indent(), pd))
-
-					switch {
-					case oCnt > 0:
-						// nada
-					case segLen > e.MaxLineLength():
-						// nada
-					case lineLen-segLen+pdLen > e.MaxLineLength():
-						// nada
-					// case pd < pdBreak: ???
-					// that is, go for the highest parens depth that satisfies, or not
-					case idxBreak > 0:
-						// nada
-					default:
-						idxBreak = i + 1
-						pdBreak = pd
-					}
-
-				case ")":
-					pd--
-				}
-			}
-
-			if idxBreak > 0 {
-				tokens[idxBreak].EnsureVSpace()
-				tokens[idxBreak].AdjustIndents(indents + pdBreak)
-			}
-		}
+		carp(debug, fmt.Sprintf("    %d - %s", idx, tokens[idx].String()))
 
 		switch tokens[idx].value {
 		case "(":
 			parensDepth++
-			pCnt++
 		case ")":
 			parensDepth--
 		}
 
-		if isOperator(0, tokens[idx]) {
-			oCnt++
+		doCheck := false
+		if parensDepth == pdl {
+			if idx > 0 && tokens[idx-1].value == "(" {
+				wrapMode = csvWrapMode(e, pKwVal)
+				doCheck = wrapMode == wrapHorizontal
+			}
 		}
 
-		if tokens[idx].vSpace > 0 {
-			lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
-			indents = calcIndent(bagType, tokens[idx])
-			idxStart = idx
-			pdStart = parensDepth
-			pCnt = 0
-			oCnt = 0
+		addBreak := false
+		if doCheck {
+			lineLen := calcLenToLineEnd(e, bagType, tokens[idxLineStart:])
+			remLen := calcLenToLineEnd(e, bagType, tokens[idx:])
+			pdLen := len(strings.Repeat(e.Indent(), indents+pdl))
+
+			switch {
+			//case oCnt > 0:
+			//	// nada
+			case lineLen <= e.MaxLineLength():
+				// nada
+			case pdLen+remLen > e.MaxLineLength():
+				// nada
+			case lineLen-remLen > e.MaxLineLength():
+				// nada
+			default:
+				idp := pdl
+				for i := idx + 1; i < idxMax; i++ {
+					if addBreak {
+						break
+					}
+
+					if tokens[i].vSpace > 0 {
+						addBreak = true
+					}
+					switch tokens[i].value {
+					case "(":
+						idp++
+					case ")":
+						addBreak = idp == pdl
+						idp--
+					}
+
+					if !isCsvWrappable(e, tokens[i].value) {
+						break
+					}
+				}
+			}
 		}
+
+		if addBreak {
+			tokens[idx].EnsureVSpace()
+			tokens[idx].AdjustIndents(indents + pdl)
+			idxLineStart = idx
+		}
+
+		if isWrapPrefixKw(e, pdl, parensDepth, tokens[idx]) {
+			pKwVal = tokens[idx].AsUpper()
+		}
+
 	}
 	return tokens
 }

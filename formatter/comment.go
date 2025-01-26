@@ -3,6 +3,7 @@ package formatter
 import (
 	"strings"
 
+	"github.com/gsiems/sqlfmt/dialect"
 	"github.com/gsiems/sqlfmt/env"
 	"github.com/gsiems/sqlfmt/parser"
 )
@@ -49,6 +50,12 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 			}
 		default:
 			switch ctVal {
+			case "IN", "INOUT", "OUT":
+				switch e.Dialect() {
+				case dialect.PostgreSQL:
+					// not needed for commenting
+					continue
+				}
 			case "AS":
 				cTok.SetKeywordCase(e, []string{ctVal})
 			}
@@ -97,7 +104,7 @@ func formatCommentOn(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, bas
 	}
 
 	if hasParens {
-		tFormatted = wrapOnCommas(e, bagType, 1, tFormatted)
+		tFormatted = wrapOnCommasX(e, bagType, 1, tFormatted)
 	}
 
 	adjustCommentIndents(bagType, &tFormatted)
@@ -190,9 +197,9 @@ func adjustCommentIndents(bagType int, tokens *[]FmtToken) {
 			switch (*tokens)[idx].value {
 			case ")":
 				//if idx > 0 {
-					//ledIndents = (*tokens)[idx-1].indents
-					ledIndents++
-					trlIndents--
+				//ledIndents = (*tokens)[idx-1].indents
+				ledIndents++
+				trlIndents--
 				//}
 			default:
 				switch bagType {

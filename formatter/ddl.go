@@ -467,7 +467,20 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		// Set the various "previous token" values
 		pTok = cTok
 
-		tFormatted = append(tFormatted, cTok)
+		addTok := true
+		if parensDepth > 0 {
+			switch cTok.AsUpper() {
+			case "IN", "INOUT", "OUT":
+				switch e.Dialect() {
+				case dialect.PostgreSQL:
+					// not needed for setting ownership
+					addTok = false
+				}
+			}
+		}
+		if addTok {
+			tFormatted = append(tFormatted, cTok)
+		}
 	}
 
 	if isAlterOwner {
@@ -493,7 +506,7 @@ func formatDDLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			}
 			pTok = tFormatted[i]
 		}
-		tFormatted = wrapOnCommas(e, DDLBag, 1, tFormatted)
+		tFormatted = wrapOnCommasX(e, DDLBag, 1, tFormatted)
 	}
 
 	adjustCommentIndents(bagType, &tFormatted)

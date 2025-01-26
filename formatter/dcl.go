@@ -147,10 +147,9 @@ func formatDCLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	wt := wrapOnCommas(e, DCLBag, 1, tFormatted)
-
-	adjustCommentIndents(bagType, &wt)
+	tFormatted = wrapOnCommasX(e, DCLBag, 1, tFormatted)
+	adjustCommentIndents(bagType, &tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
 }
