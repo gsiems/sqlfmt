@@ -1,5 +1,7 @@
 package formatter
 
+import "log"
+
 type intStack struct {
 	ints []int
 }
@@ -51,4 +53,10 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func carp(verbose bool, msg string) {
+	if verbose {
+		log.Print(msg)
+	}
 }
