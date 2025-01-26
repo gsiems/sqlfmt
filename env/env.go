@@ -28,7 +28,6 @@ type Env struct {
 	preserveQuoting bool   // Preserve quoted identifiers (default is to unquote identifiers when possible)
 	wrapLongLines   bool   // Indicates if line-wrapping should be performed on long lines
 	wrapMultiTuples int    // Indicates how values with multiple tuples should be wrapped
-	minLineLength   int    // The suggested minimum line length before line-wrapping is triggered
 	maxLineLength   int    // The suggested maximum line length after which line-wrapping is triggered
 	dbdialect       dialect.DbDialect
 }
@@ -44,7 +43,6 @@ func NewEnv() *Env {
 	e.preserveQuoting = false
 	e.wrapMultiTuples = WrapNone
 	e.wrapLongLines = true
-	e.minLineLength = 40
 	e.maxLineLength = 120
 
 	return &e
@@ -67,8 +65,6 @@ func (e *Env) SetInt(k string, v int) {
 	switch strings.ToLower(k) {
 	case "indentsize", "indent":
 		e.SetIndent(v)
-	case "minlinelength":
-		e.SetMinLineLength(v)
 	case "maxlinelength":
 		e.SetMaxLineLength(v)
 	}
@@ -205,32 +201,7 @@ func (e *Env) SetKeywordCase(v string) {
 	}
 }
 
-// Line Length /////////////////////////////////////////////////////////
-
-//// Minimum Line Length
-
-func (e *Env) MinLineLength() int {
-	if e.wrapLongLines {
-		return e.minLineLength
-	}
-	return 0
-}
-
-func (e *Env) SetMinLineLength(v int) {
-	switch {
-	case v+e.MinLineLength() >= e.maxLineLength:
-		e.maxLineLength = v + e.MinLineLength()
-		e.minLineLength = v
-		e.wrapLongLines = true
-	case v < 40:
-	// let's not go there either
-	default:
-		e.minLineLength = v
-		e.wrapLongLines = true
-	}
-}
-
-//// Maximum Line Length
+// Maximum Line Length /////////////////////////////////////////////////
 
 func (e *Env) MaxLineLength() int {
 	if e.wrapLongLines {
@@ -241,8 +212,6 @@ func (e *Env) MaxLineLength() int {
 
 func (e *Env) SetMaxLineLength(v int) {
 	switch {
-	case v-e.MinLineLength() <= e.minLineLength:
-	// let's not go there
 	case v < 72:
 	// let's not go there either
 	default:
@@ -320,10 +289,6 @@ func (e *Env) SetDirectives(v string) {
 			case "indentsize", "indent":
 				if s, err := strconv.Atoi(v); err == nil {
 					e.SetIndent(s)
-				}
-			case "minlinelength", "ml":
-				if s, err := strconv.Atoi(v); err == nil {
-					e.SetMinLineLength(s)
 				}
 			case "maxlinelength", "xl":
 				if s, err := strconv.Atoi(v); err == nil {
