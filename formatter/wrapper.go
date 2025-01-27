@@ -243,15 +243,11 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 	tokens = wrapInto(e, bagType, tokens)
 
 	//////////////////////////////////////////////////
-	// return tokens ////////////////////////////////////
-	//////////////////////////////////////////////////
-
 	for idx := 0; idx <= idxMax; idx++ {
 
 		eol := false
 		switch {
 		case idx < idxMax:
-			//eol = tokens[idx+1].fbp
 			eol = tokens[idx].fbp
 		case idx == idxMax:
 			eol = true
@@ -276,7 +272,6 @@ func wrapLines(e *env.Env, bagType int, tokens []FmtToken) (ret []FmtToken) {
 // wrapLine takes "one lines worth" of tokens and attempts to add line breaks
 // as needed
 func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
-	//return tokens
 	if len(tokens) == 0 {
 		return tokens
 	}
@@ -864,8 +859,10 @@ func wrapInto(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	intoParensDepth := 0
 	parensDepth := 0
 	idxStart := 0
+	idxLineStart := 0
 	ppKwVal := ""
 	pKwVal := ""
+	wMode := env.WrapNone
 	var intoIdxs []int
 
 	idxMax := len(tokens) - 1
@@ -876,6 +873,9 @@ func wrapInto(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 		if cTok.vSpace > 0 {
 			indents = calcIndent(bagType, cTok)
+			if idxStart == 0 {
+				idxLineStart = idx
+			}
 		}
 
 		switch cTok.value {
@@ -886,6 +886,38 @@ func wrapInto(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				inInto = true
 				intoIdxs = nil
 				idxStart = idx
+				eCnt := 1
+				ipd := 0
+				idxEnd := 0
+				// determine how many elements are in the tuple(s)
+				for j := idx; j <= idxMax; j++ {
+					done := false
+					switch tokens[j].AsUpper() {
+					case "(":
+						ipd++
+					case ")":
+						ipd--
+						done = ipd < 0
+					case ",":
+						if ipd == 1 {
+							eCnt++
+						}
+					}
+
+					if done {
+						break
+						idxEnd = j
+					}
+				}
+
+				if eCnt > 3 {
+					wMode = env.WrapAll
+				} else {
+					lineLength := calcSliceLen(e, bagType, tokens[idxLineStart:idxEnd])
+					if lineLength > e.MaxLineLength() {
+						wMode = env.WrapAll
+					}
+				}
 			}
 
 		case ",":
@@ -897,7 +929,7 @@ func wrapInto(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 
 		case ")":
 			if intoParensDepth == parensDepth {
-				if len(intoIdxs) > 0 {
+				if len(intoIdxs) > 0 && wMode == env.WrapAll {
 					for _, i := range intoIdxs {
 						tokens[i].EnsureVSpace()
 						tokens[i].AdjustIndents(indents + parensDepth - 1)
@@ -969,7 +1001,7 @@ func isWrapPrefixKw(e *env.Env, pdl, parensDepth int, t FmtToken) bool {
 func csvWrapMode(e *env.Env, v string) int {
 
 	switch strings.ToUpper(v) {
-	case "RETURNING", "ROW", "INTO", "FOR", "AS":
+	case "RETURNING", "ROW", "INTO", "FOR", "AS", "ON CONFLICT":
 		//, "CONCAT_WS", "CONCAT", "COALESCE":
 		return wrapHybrid
 	case "CALL", "PERFORM", "JSON_POPULATE_RECORDSET":
@@ -1275,12 +1307,11 @@ func wrapOnCommasY(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 		return tokens
 	}
 
-	cCnt := 0
+	eCnt := 0
 	idxMax := len(tokens) - 1
 	idxStart := 0
 	idxLineStart := 0
 	indents := 0
-	//lineLength := 0
 	parensDepth := 0
 	pKwVal := ""
 	wrapMode := wrapVertical
@@ -1306,7 +1337,7 @@ func wrapOnCommasY(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 			if parensDepth == pdl {
 				wrapMode = csvWrapMode(e, pKwVal)
 				idxStart = idx
-				cCnt = 0
+				eCnt = 1
 			}
 		}
 
@@ -1316,14 +1347,13 @@ func wrapOnCommasY(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 			case ")", ";", "IN":
 				doCheck = true
 			case ",":
-				cCnt++
-
-				if cCnt == 1 {
+				if eCnt == 1 {
 					switch pKwVal {
 					case "AS":
 						indents++
 					}
 				}
+				eCnt++
 
 			default:
 				if wrapMode != wrapNone && !isCsvWrappable(e, tokens[idx].value) {
@@ -1340,17 +1370,17 @@ func wrapOnCommasY(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 				segLen := calcSliceLen(e, bagType, tokens[idxLineStart:idx]) + calcLenToLineEnd(e, bagType, tokens[idx:])
 				switch wrapMode {
 				case wrapVertical:
-					doWrap = cCnt > 0 && segLen > e.MaxLineLength()
+					doWrap = eCnt > 1 && segLen > e.MaxLineLength()
 				case wrapHybrid:
-					doWrap = cCnt > 3 || segLen > e.MaxLineLength()
+					doWrap = eCnt > 3 || segLen > e.MaxLineLength()
 				default:
 					switch pKwVal {
 					case "JSON_POPULATE_RECORDSET":
-						doWrap = cCnt > 0
+						doWrap = true
 					}
 				}
-				carp(debug, fmt.Sprintf("    idxStart: %d, idx: %d, cCnt: %d, segLen: %d, pKwVal: %s, wrapMode: %s:, doWrap: %t",
-					idxStart, idx, cCnt, segLen, pKwVal, wrapsName(wrapMode), doWrap))
+				carp(debug, fmt.Sprintf("    idxStart: %d, idx: %d, eCnt: %d, segLen: %d, pKwVal: %s, wrapMode: %s:, doWrap: %t",
+					idxStart, idx, eCnt, segLen, pKwVal, wrapsName(wrapMode), doWrap))
 			}
 
 			if doWrap {
@@ -1379,11 +1409,11 @@ func wrapOnCommasY(e *env.Env, bagType, pdl int, tokens []FmtToken) []FmtToken {
 		switch tokens[idx].value {
 		case ")":
 			if parensDepth == pdl {
-				cCnt = 0
+				eCnt = 0
 			}
 			parensDepth--
 		case ";", "IN":
-			cCnt = 0
+			eCnt = 0
 		}
 
 		if isWrapPrefixKw(e, pdl, parensDepth, tokens[idx]) {
@@ -1984,6 +2014,7 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	// separate line and the elements within should be wrapped according to
 	// the e.WrapMultiTuples() value
 
+	eCnt := 0
 	idxStart := 0
 	indents := 0
 	inValues := false
@@ -2015,15 +2046,46 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				inValues = true
 				idxStart = idx
 				tplStart = idx
+				eCnt = 1
+
+				ipd := 0
+				// determine how many elements are in the tuple(s)
+				for j := idx; j <= idxMax; j++ {
+					done := false
+					switch tokens[j].AsUpper() {
+					case "(":
+						ipd++
+					case ")":
+						ipd--
+						done = ipd < 0
+					case ",":
+						if ipd == 1 {
+							eCnt++
+						}
+						done = ipd <= 0
+					case ";", "WHEN":
+						done = ipd <= 0
+					}
+
+					//carp(debug, fmt.Sprintf("        j: %d, ipd: %d, eCnt: %d, done: %t", j, ipd, eCnt, done))
+
+					if done {
+						break
+					}
+
+				}
+				//carp(debug, fmt.Sprintf("        eCnt: %d", eCnt))
+
 			case ",":
-				if parensDepth == pdl && inValues {
-					tplStart = idx
-					//tplCnt++
-					tokens[idx].EnsureVSpace()
-					tokens[idx].AdjustIndents(indents)
-					if tokens[idxStart].vSpace == 0 {
-						tokens[idxStart].EnsureVSpace()
-						tokens[idxStart].AdjustIndents(indents)
+				if inValues {
+					if parensDepth == pdl {
+						tplStart = idx
+						tokens[idx].EnsureVSpace()
+						tokens[idx].AdjustIndents(indents)
+						if tokens[idxStart].vSpace == 0 {
+							tokens[idxStart].EnsureVSpace()
+							tokens[idxStart].AdjustIndents(indents)
+						}
 					}
 				}
 			}
@@ -2034,11 +2096,6 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				if inValues {
 					// Wrap, or not, the elements within the tuple
 
-					// TODO: If a values statement has but one tuple and that
-					// tuple has less than n elements (n TBD) then does it
-					// need to be wrapped? Wrapping one element does seem silly
-					// so n > 1...
-
 					// Check the next token to determine if there are multiple
 					// tuples involved and, if so, determine how to wrap them
 					if tplWrapping == 0 {
@@ -2048,9 +2105,20 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 								tplWrapping = e.WrapMultiTuples()
 							}
 						}
-						// if there is only one tuple then it gets wrapped regardless
+
+						// If a values statement has but one tuple and that
+						// tuple has less than 4 elements only wrap it if it
+						// would be too long. If there are more elements then
+						// wrap regardless of tuple length
+
+						// if there is only one tuple then it gets wrapped based
+						// on element count/length
 						if !hasMultiTuples {
-							tplWrapping = env.WrapAll
+							if eCnt > 3 {
+								tplWrapping = env.WrapAll
+							} else {
+								tplWrapping = env.WrapLong
+							}
 						}
 					}
 
@@ -2112,7 +2180,7 @@ func wrapValueTuples(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 				tplStart = 0
 			}
 			parensDepth--
-		case ";":
+		case ";", "WHEN":
 			inValues = false
 			idxStart = 0
 			pdl = 0
