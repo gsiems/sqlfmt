@@ -45,20 +45,19 @@ func (s *dmlFmtStat) updateClause(c string) {
 
 	// update the current action within the DML
 	switch c {
-	case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT", "MERGE":
+	case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT", "MERGE INTO":
 		s.cAct = c
 	}
 
 	// update the primary action within the DML
 	switch c {
 	case "SELECT", "INSERT", "UPDATE", "DELETE", "UPSERT",
-		"MERGE", "REFRESH", "REINDEX", "TRUNCATE", "WITH":
+		"MERGE INTO", "REFRESH", "REINDEX", "TRUNCATE", "WITH":
 
 		switch s.pAct {
 		case "", "WITH":
 			s.pAct = c
 		}
-
 	}
 }
 
@@ -210,6 +209,9 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				if e.Dialect() == dialect.PostgreSQL && isPgBodyBoundary(pTok.value) {
 					canOpenBag = true
 				} else {
+					//if pTok.IsBag() {
+					//	canOpenBag = true
+					//}
 					canOpenBag = pTok.IsBag()
 				}
 			}
@@ -221,7 +223,7 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		switch {
 		case canOpenBag:
 			switch ctVal {
-			case "DELETE", "INSERT", "MERGE", "SELECT", "TRUNCATE", "UPDATE",
+			case "DELETE", "INSERT", "MERGE INTO", "SELECT", "TRUNCATE", "UPDATE",
 				"UPSERT", "WITH":
 				openBag = true
 			case "REFRESH":
@@ -242,7 +244,7 @@ func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 		case canOpenChildBag:
 			switch ctVal {
-			case "DELETE", "INSERT", "MERGE", "SELECT", "UPDATE", "UPSERT",
+			case "DELETE", "INSERT", "MERGE INTO", "SELECT", "UPDATE", "UPSERT",
 				"WITH":
 				openChildBag = true
 			}
@@ -439,16 +441,16 @@ func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 			"FIRST", "FOR", "FOR UPDATE", "FROM", "FULL", "GROUP", "HAVING",
 			"IDENTITY", "IN", "INNER", "INSERT", "INTERSECT", "INTO", "IS",
 			"JOIN", "LAST", "LATERAL", "LEFT", "LIKE", "LIMIT", "MATCHED",
-			"MATERIALIZED", "MERGE", "MINUS", "NATURAL", "NEXT", "NFC", "NFD",
-			"NFKC", "NFKD", "NO", "NORMALIZED", "NOT", "NOTHING", "NOWAIT",
-			"NULL", "NULLS", "OF", "OFFSET", "ON", "ON CONFLICT", "ONLY", "OR",
-			"ORDER", "ORDER BY", "OUTER", "OVER", "OVERRIDING", "PARTITION",
-			"PARTITION BY", "RECURSIVE", "REFRESH", "REINDEX", "RESTART",
-			"RETURNING", "RIGHT", "ROW", "ROWS", "SELECT", "SET", "SHARE",
-			"SOURCE", "SYSTEM", "TABLE", "TARGET", "TEMP", "TEMPORARY", "THEN",
-			"TRUNCATE", "UNION", "UNIQUE", "UNLOGGED", "UPDATE", "UPSERT",
-			"USING", "VALUE", "VALUES", "VIEW", "WHEN", "WHERE", "WINDOW",
-			"WITH", "WITHIN", "GROUP BY":
+			"MATERIALIZED", "MERGE INTO", "MINUS", "NATURAL", "NEXT", "NFC",
+			"NFD", "NFKC", "NFKD", "NO", "NORMALIZED", "NOT", "NOTHING",
+			"NOWAIT", "NULL", "NULLS", "OF", "OFFSET", "ON", "ON CONFLICT",
+			"ONLY", "OR", "ORDER", "ORDER BY", "OUTER", "OVER", "OVERRIDING",
+			"PARTITION", "PARTITION BY", "RECURSIVE", "REFRESH", "REINDEX",
+			"RESTART", "RETURNING", "RIGHT", "ROW", "ROWS", "SELECT", "SET",
+			"SHARE", "SOURCE", "SYSTEM", "TABLE", "TARGET", "TEMP",
+			"TEMPORARY", "THEN", "TRUNCATE", "UNION", "UNIQUE", "UNLOGGED",
+			"UPDATE", "UPSERT", "USING", "VALUE", "VALUES", "VIEW", "WHEN",
+			"WHERE", "WINDOW", "WITH", "WITHIN", "GROUP BY":
 
 			if cTok.IsKeyword() {
 				cTok.SetUpper()
@@ -515,8 +517,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		case 0:
 
 			switch ctVal {
-			case "DELETE", "GROUP BY", "HAVING", "INSERT", "INTERSECT",
-				"JOIN", "MERGE", "MINUS", "ORDER BY", "REFRESH", "REINDEX",
+			case "DELETE", "GROUP BY", "HAVING", "INSERT", "INTERSECT", "JOIN",
+				"MERGE INTO", "MINUS", "ORDER BY", "REFRESH", "REINDEX",
 				"RETURNING", "SELECT", "SET", "TRUNCATE", "UNION", "UPDATE",
 				"UPSERT", "VALUES", "WHERE", "WITH":
 
@@ -533,7 +535,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			case "ON CONFLICT":
 				onConflict = true
 				cat.updateClause(ctVal)
-
 			}
 		default:
 			switch ctVal {
@@ -567,7 +568,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			case cat.currentAction():
 				ensureVSpace = true
 			case "DELETE", "EXCEPT", "HAVING", "INSERT", "INTERSECT", "LIMIT",
-				"MERGE", "MINUS", "OFFSET", "ORDER", "REFRESH", "REINDEX",
+				"MERGE INTO", "MINUS", "OFFSET", "ORDER", "REFRESH", "REINDEX",
 				"RETURNING", "SELECT", "TRUNCATE", "UNION", "UPSERT", "USING",
 				"GROUP BY", "ORDER BY":
 
@@ -620,7 +621,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					}
 				}
 			case "WHEN":
-				if cat.primaryAction() == "MERGE" {
+				if cat.primaryAction() == "MERGE INTO" {
 					ensureVSpace = true
 				}
 
@@ -848,9 +849,9 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 						}
 					}
 				}
-			case "MERGE":
+			case "MERGE INTO":
 				switch ctVal {
-				case "MERGE":
+				case "MERGE INTO":
 					localIndents = 0
 				case "USING", "WHEN":
 					localIndents = 1
@@ -934,11 +935,11 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		tFormatted = append(tFormatted, cTok)
 	}
 
-	wt := wrapLines(e, DMLBag, tFormatted)
+	tFormatted = wrapLines(e, DMLBag, tFormatted)
 
 	parensDepth := 0
 	indents = 0
-	for _, cTok := range wt {
+	for _, cTok := range tFormatted {
 
 		switch cTok.value {
 		case "(":
@@ -962,8 +963,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		}
 	}
 
-	adjustCommentIndents(bagType, &wt)
+	adjustCommentIndents(bagType, &tFormatted)
 
 	// Replace the mapped tokens with the newly formatted tokens
-	UpsertMappedBag(bagMap, b.typeOf, b.id, "", wt)
+	UpsertMappedBag(bagMap, b.typeOf, b.id, "", tFormatted)
 }
