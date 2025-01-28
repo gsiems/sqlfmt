@@ -299,6 +299,163 @@ func wrapLine(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 	return tokens
 }
 
+func addCsvBreaks(e *env.Env, bagType, indents, idxLineStart, idxStart, idxEnd, wMode int, tokens *[]FmtToken) {
+
+	// Assertion: the idxStart token is the opening token (not part of the csv list)
+	// and may be an open parens, ORDER BY, GROUP BY, etc.
+	// The idxEnd token is *probably* not part of the csv list???
+
+	var ixs []int
+	lCnt := 1
+	ipd := 0
+
+	segLen := calcSliceLen(e, bagType, (*tokens)[idxLineStart:idxEnd])
+	if (*tokens)[idxEnd].vSpace == 0 {
+		segLen += calcLenToLineEnd(e, bagType, (*tokens)[idxEnd:])
+	}
+
+	for idx := idxStart + 1; idx <= idxEnd; idx++ {
+		switch (*tokens)[idx].value {
+		case "(":
+			ipd++
+		case ")":
+			ipd--
+		}
+
+		// gather the token indexes to potentially wrap on
+		if ipd == 0 {
+			if idx == idxStart+1 {
+				ixs = append(ixs, idx)
+			} else {
+				switch (*tokens)[idx-1].value {
+				case ",":
+					ixs = append(ixs, idx)
+				}
+			}
+		}
+		if idx < idxEnd && (*tokens)[idx].vSpace > 0 {
+			lCnt++
+		}
+	}
+
+	if len(ixs) == 1 {
+		return
+	}
+
+	switch wMode {
+	case wrapVertical:
+		// nada
+	case wrapHorizontal:
+		if segLen <= e.MaxLineLength() {
+			return
+		}
+	case wrapHybrid:
+		switch {
+		case len(ixs) > 3:
+			wMode = wrapVertical
+		case len(ixs) > 1:
+			wMode = wrapVertical
+		case segLen > e.MaxLineLength():
+			wMode = wrapVertical
+		default:
+			return
+		}
+	default:
+		wMode = wrapHorizontal
+	}
+
+	switch wMode {
+	case wrapVertical:
+
+	case wrapHorizontal:
+
+		// 1-- wrap after the open parens as needed
+
+		// 2-- wrap just before the length exceeds the max line length
+		breakCount := 0
+		iMax := len(ixs) - 1
+		for idx := 0; idx <= iMax; idx++ {
+			ix := ixs[idx]
+
+			segLen = 0
+			switch {
+			case idxLineStart == ix:
+				segLen = calcLen(e, (*tokens)[idxStart])
+			case idxLineStart > ix:
+				segLen = calcLenToLineEnd(e, bagType, (*tokens)[idxLineStart:])
+			default:
+				segLen = calcSliceLen(e, bagType, (*tokens)[idxLineStart:ix])
+			}
+
+			nLen := 0
+			switch {
+			case ix < ixs[iMax]:
+				nLen = calcSliceLen(e, bagType, (*tokens)[ix:ixs[idx+1]])
+			case ix == ixs[iMax]:
+				nLen = calcLenToLineEnd(e, bagType, (*tokens)[ix:])
+			case ix < idxEnd:
+				nLen = calcSliceLen(e, bagType, (*tokens)[ix:idxEnd])
+			}
+
+			if segLen+nLen > e.MaxLineLength() {
+				(*tokens)[ix].EnsureVSpace()
+				(*tokens)[ix].AdjustIndents(indents)
+				breakCount++
+				idxLineStart = ix
+			}
+		}
+
+		if breakCount == 0 && false {
+			// no breaks added... try scanning to the first comma that
+			// can split the line into two portions that are both less
+			// than the max line length
+			segLen := calcLenToLineEnd(e, bagType, (*tokens)[idxLineStart:])
+			pdLen := len(strings.Repeat(e.Indent(), indents))
+
+			for idx := 0; idx <= iMax; idx++ {
+				ix := ixs[idx]
+				remLen := calcLenToLineEnd(e, bagType, (*tokens)[ix:])
+
+				switch {
+				case segLen <= e.MaxLineLength():
+					// nada
+				case pdLen+remLen > e.MaxLineLength():
+					// nada
+				case segLen-remLen > e.MaxLineLength():
+					// nada
+				default:
+					(*tokens)[ix].EnsureVSpace()
+					(*tokens)[ix].AdjustIndents(indents)
+					breakCount++
+					idxLineStart = ix
+				}
+				if breakCount > 0 {
+					break
+				}
+			}
+		}
+
+		// 3-- wrap before the close parens as needed
+		//segLen = calcLenToLineEnd(e, bagType, (*tokens)[idxLineStart:])
+		//switch {
+		//case segLen <= e.MaxLineLength():
+		//	// nada
+		//case bagType == CommentOnBag:
+		//	// nada
+		//case idxMax-idx <= 3:
+		//	// nada
+		//default:
+		//	if addBreak {
+		//		(*tokens)[idxEnd].EnsureVSpace()
+		//		(*tokens)[idxEnd].AdjustIndents(indents)
+		//		idxLineStart = idxEnd
+		//	}
+		//}
+
+	}
+
+}
+
 func addInlineCaseBreaks(e *env.Env, bagType, indents, parensDepth, lineLen, idxStart, idxEnd int, tokens *[]FmtToken) {
 
 	caseLen := 0
@@ -683,12 +840,11 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 	idxMax := len(tokens) - 1
 
 	for pdl := 1; pdl <= mxPd; pdl++ {
-		cCnt := 0
 		idxBase := 0
-		idxStart := 0
 		indents := 0
 		lCnt := 0
 		parensDepth := 0
+		var idxs []int
 
 		if tokens[0].vSpace > 0 {
 			indents = calcIndent(bagType, tokens[0])
@@ -699,9 +855,9 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 			if tokens[idx].value == "(" {
 				parensDepth++
 				if parensDepth == pdl {
-					cCnt = 0
 					lCnt = 0
-					idxStart = idx
+					idxs = nil
+					idxs = append(idxs, idx)
 				}
 			}
 
@@ -718,7 +874,7 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 
 				switch tokens[idx].value {
 				case ")":
-					if cCnt > 0 {
+					if len(idxs) > 1 {
 						segLen := calcSliceLen(e, bagType, tokens[idxBase:idx])
 						switch {
 						case idx == idxMax:
@@ -736,14 +892,15 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 							doWrap = true
 						}
 					}
+					idxs = append(idxs, idx)
 				case "ORDER BY", "GROUP BY", "PARTITION BY":
-					cCnt++
+					idxs = append(idxs, idx)
 				}
 			}
 
 			if doWrap {
 				tpd := pdl
-				for i := idxStart + 1; i < idx; i++ {
+				for i := idxs[0] + 1; i < idx; i++ {
 					switch tokens[i].value {
 					case "(":
 						tpd++
@@ -761,6 +918,18 @@ func wrapDMLWindowFunctions(e *env.Env, bagType, mxPd int, tokens []FmtToken) []
 								tokens[i].AdjustIndents(tokens[i].indents + 1)
 							}
 						}
+					}
+				}
+
+				ixst := 0
+				ixnd := 0
+				for i, j := range idxs {
+					if i == 0 {
+						ixnd = j
+					} else {
+						ixst = ixnd
+						ixnd = j
+						addCsvBreaks(e, bagType, tokens[ixst].indents+1, ixst, ixst, ixnd, wrapHorizontal, &tokens)
 					}
 				}
 			}
