@@ -50,6 +50,14 @@ func formatDCLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 			}
 		}
 
+		switch e.Dialect() {
+		case dialect.Oracle:
+			switch ctVal {
+			case "READ":
+				cTok.SetUpper()
+			}
+		}
+
 		ret = append(ret, cTok)
 	}
 
