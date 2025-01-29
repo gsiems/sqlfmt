@@ -620,6 +620,18 @@ func addInlineCaseBreaks(e *env.Env, bagType, indents, parensDepth, lineLen, idx
 					}
 
 					if icd == 0 {
+
+						switch ctVal {
+						case "WHEN", "ELSE", "END":
+							if (*tokens)[j].vSpace > 0 {
+								(*tokens)[j].indents = caseInd
+							}
+						case "THEN":
+							if (*tokens)[j].vSpace > 0 {
+								(*tokens)[j].indents = caseInd + 1
+							}
+						}
+
 						switch ctVal {
 						case "THEN":
 							idxThen = j
