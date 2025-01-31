@@ -26,7 +26,6 @@ type Env struct {
 	outputFile      string // The file to write to
 	formatCode      bool   // Indicate if there should be any formatting performed or not
 	preserveQuoting bool   // Preserve quoted identifiers (default is to unquote identifiers when possible)
-	wrapLongLines   bool   // Indicates if line-wrapping should be performed on long lines
 	wrapMultiTuples int    // Indicates how values with multiple tuples should be wrapped
 	maxLineLength   int    // The suggested maximum line length after which line-wrapping is triggered
 	dbdialect       dialect.DbDialect
@@ -42,7 +41,6 @@ func NewEnv() *Env {
 	e.formatCode = true
 	e.preserveQuoting = false
 	e.wrapMultiTuples = WrapNone
-	e.wrapLongLines = true
 	e.maxLineLength = 120
 
 	return &e
@@ -74,8 +72,6 @@ func (e *Env) SetBool(k string, v bool) {
 	switch strings.ToLower(k) {
 	case "preservequoting":
 		e.preserveQuoting = v
-	case "linewrapping", "wraplonglines", "wrapping":
-		e.SetWrapLongLines(v)
 	case "disableformatting":
 		e.formatCode = false
 	case "enableformatting":
@@ -151,18 +147,7 @@ func (e *Env) SetIndent(v int) {
 
 // Casing //////////////////////////////////////////////////////////////
 
-func StrToCase(v string) int {
-	switch strings.ToLower(v) {
-	case "foldupper", "uppercase", "upper":
-		return UpperCase
-	case "foldlower", "lowercase", "lower":
-		return LowerCase
-	case "nofolding", "nocase", "none":
-		return NoCase
-	}
-	// Default to DefaultCase
-	return DefaultCase
-}
+//// Identifiers
 
 func (e *Env) CaseFolding() int {
 	if e.dbdialect == nil {
@@ -187,58 +172,52 @@ func (e *Env) KeywordCase() int {
 }
 
 func (e *Env) SetKeywordCase(v string) {
-	c := StrToCase(v)
-	switch c {
-	case DefaultCase:
+	switch strings.ToLower(v) {
+	case "foldupper", "uppercase", "upper":
+		e.keywordCase = UpperCase
+	case "foldlower", "lowercase", "lower":
+		e.keywordCase = LowerCase
+	default:
 		switch e.CaseFolding() {
 		case dialect.FoldLower, dialect.FoldUpper:
 			e.keywordCase = UpperCase
 		default:
 			e.keywordCase = NoCase
 		}
-	default:
-		e.keywordCase = c
 	}
 }
 
 // Maximum Line Length /////////////////////////////////////////////////
 
 func (e *Env) MaxLineLength() int {
-	if e.wrapLongLines {
-		return e.maxLineLength
-	}
-	return 0
+	return e.maxLineLength
 }
 
 func (e *Env) SetMaxLineLength(v int) {
 	switch {
 	case v < 72:
-	// let's not go there either
+	// let's not go there
 	default:
 		e.maxLineLength = v
-		e.wrapLongLines = true
 	}
 }
 
-//// No wrapping
+// Multi-tuple Wrapping ////////////////////////////////////////////////
+
 func (e *Env) WrapMultiTuples() int {
 	return e.wrapMultiTuples
 }
-//func (e *Env) WrapAllMultiTuples() bool {
-//	return e.wrapMultiTuples == WrapAll
-//}
-//func (e *Env) WrapNoMultiTuples() bool {
-//	return e.wrapMultiTuples == WrapNone
-//}
 
+func (e *Env) SetMultiTupleWrapping(v string) {
 
-
-func (e *Env) WrapLongLines() bool {
-	return e.wrapLongLines
-}
-
-func (e *Env) SetWrapLongLines(v bool) {
-	e.wrapLongLines = v
+	switch strings.ToLower(v) {
+	case "all", "wrapall":
+		e.wrapMultiTuples = WrapAll
+	case "long", "wraplong":
+		e.wrapMultiTuples = WrapLong
+	default:
+		e.wrapMultiTuples = WrapNone
+	}
 }
 
 // File Directives /////////////////////////////////////////////////////
@@ -264,16 +243,11 @@ func (e *Env) SetDirectives(v string) {
 			switch strings.ToLower(k) {
 			case "preservequoting":
 				e.preserveQuoting = true
-			case "linewrapping", "wraplonglines", "wrapping":
-				e.SetWrapLongLines(true)
-			case "disableformatting", "donotformat", "noformatting":
+			case "noformat":
 				e.formatCode = false
-			case "enableformatting":
-				e.formatCode = true
 			}
 
 		case 2:
-
 			k := strings.Trim(kv[0], " \t")
 			v := strings.Trim(kv[1], " \t")
 
@@ -296,21 +270,20 @@ func (e *Env) SetDirectives(v string) {
 				}
 			case "preservequoting":
 				switch strings.ToLower(v) {
-				case "off", "false", "f":
-					e.preserveQuoting = false
-				default:
+				case "on", "true", "t":
 					e.preserveQuoting = true
+				default:
+					e.preserveQuoting = false
 				}
-			case "linewrapping", "wraplonglines", "wrapping":
+			case "noformat":
 				switch strings.ToLower(v) {
 				case "off", "false", "f":
-					e.SetWrapLongLines(false)
+					e.formatCode = true
 				default:
-					e.SetWrapLongLines(true)
+					e.formatCode = false
 				}
-
-			// TODO: Add tuple wrapping
-
+			case "wrapMultiTuples":
+				e.SetMultiTupleWrapping(v)
 			}
 		}
 	}
