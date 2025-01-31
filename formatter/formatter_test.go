@@ -126,7 +126,7 @@ func TestSQLFiles(t *testing.T) {
 
 			////////////////////////////////////////////////////////////////////////
 			// Tag the tokens and compare to expected
-			bagMap, mainTokens := tagBags(e, cleaned)
+			bagMap, mainTokens, _, _ := tagBags(e, cleaned)
 
 			err = writeTagged(taggedDir, d, file.Name(), mainTokens, bagMap, e, "Tagged")
 			if err != nil {
