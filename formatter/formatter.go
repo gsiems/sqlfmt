@@ -22,7 +22,7 @@ const (
 	CommentOnBag              // A bag of "COMMENT ON ..." tokens
 )
 
-func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
+func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken, []string, []string) {
 
 	bagMap := make(map[string]TokenBag)
 
@@ -39,16 +39,21 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 	remainder = tagDDL(e, remainder, bagMap)
 
 	// Check for warnings and errors
-	var warnings []string // list of (non-fatal) warnings found
-	var errors []string   // list of (fatal) errors found
+	var warnStrings []string // list of (non-fatal) warnings found
+	var errStrings []string  // list of (fatal) errors found
 
 	for _, bag := range bagMap {
 
 		if len(bag.warnings) > 0 {
-			warnings = append(warnings, bag.warnings...)
+			warnStrings = append(warnStrings, bag.warnings...)
 		}
 		if len(bag.errors) > 0 {
-			errors = append(errors, bag.errors...)
+			errStrings = append(errStrings, bag.errors...)
+		}
+
+		switch bag.typeOf {
+		case DNFBag:
+			errStrings = append(errStrings, "Non-formattable code detected")
 		}
 
 		parensDepth := 0
@@ -79,32 +84,42 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken) {
 			}
 
 			if bag.forObj != "" {
-				errors = append(errors, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s for %s", parensDepth, label, bag.forObj))
+				errStrings = append(errStrings, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s for %s", parensDepth, label, bag.forObj))
 			} else {
-				errors = append(errors, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s", parensDepth, label))
+				errStrings = append(errStrings, fmt.Sprintf("%d unbalanced parenthesis found while parsing %s", parensDepth, label))
 			}
 		}
 	}
 
-	return bagMap, remainder
+	return bagMap, remainder, warnStrings, errStrings
 }
 
-func FormatInput(e *env.Env, input string) (string, error) {
+func FormatInput(e *env.Env, input string) (string, []string, []string) {
+	var warnStrings []string
+	var errStrings []string
+	var mainTokens []FmtToken
+	var bagMap map[string]TokenBag
 
 	p := parser.NewParser(e.DialectName())
 	parsed, err := p.ParseStatements(input)
 	if err != nil {
-		return "", err
+		errStrings = append(errStrings, fmt.Sprintf("%s", err))
+		return "", warnStrings, errStrings
 	}
 
 	cleaned := prepParsed(e, parsed)
-	bagMap, mainTokens := tagBags(e, cleaned)
+	bagMap, mainTokens, warnStrings, errStrings = tagBags(e, cleaned)
+
+	if len(errStrings) > 0 {
+		return "", warnStrings, errStrings
+	}
+
 	fmtTokens := formatBags(e, mainTokens, bagMap)
 	untagged := untagBags(fmtTokens, bagMap)
 	unstashed := unstashComments(e, untagged)
 	fmtStatement := combineTokens(e, unstashed)
 
-	return fmtStatement, nil
+	return fmtStatement, warnStrings, errStrings
 }
 
 // stashComments caches comments with their adjoining non-comment token for the
