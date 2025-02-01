@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gsiems/sqlfmt/dialect"
+	"github.com/gsiems/db-dialect/dialect"
 )
 
 const (

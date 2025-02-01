@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gsiems/sqlfmt/dialect"
+	"github.com/gsiems/db-dialect/dialect"
 	"github.com/gsiems/sqlfmt/env"
 	"github.com/gsiems/sqlfmt/parser"
 )

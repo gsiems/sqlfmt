@@ -3,7 +3,7 @@ package formatter
 import (
 	"fmt"
 
-	"github.com/gsiems/sqlfmt/dialect"
+	"github.com/gsiems/db-dialect/dialect"
 	"github.com/gsiems/sqlfmt/env"
 )
 

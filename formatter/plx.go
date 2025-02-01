@@ -1,7 +1,7 @@
 package formatter
 
 import (
-	"github.com/gsiems/sqlfmt/dialect"
+	"github.com/gsiems/db-dialect/dialect"
 	"github.com/gsiems/sqlfmt/env"
 )
 
