@@ -147,10 +147,10 @@ func runapp() (rc int) {
 	////////////////////////////////////////////////////////////////////
 	formatted, warnStrings, errStrings := formatter.FormatInput(e, input)
 
-	logStderr("WARNING", warnStrings)
+	logStderr("WARNING", *inputFile, warnStrings)
 
 	if len(errStrings) > 0 {
-		logStderr("ERROR", errStrings)
+		logStderr("ERROR", *inputFile, errStrings)
 		return 1
 	}
 
@@ -176,7 +176,7 @@ func dedupe(s []string) []string {
 	return result
 }
 
-func logStderr(label string, messages []string) {
+func logStderr(label, fileName string, messages []string) {
 
 	if len(messages) > 0 {
 		smp := make(map[string]bool)
@@ -189,7 +189,7 @@ func logStderr(label string, messages []string) {
 		}
 
 		for _, msg := range msgs {
-			fmt.Fprint(os.Stderr, fmt.Sprintf("%s: %s\n", label, msg))
+			fmt.Fprint(os.Stderr, fmt.Sprintf("%s: %s (%s)\n", label, msg, fileName))
 		}
 	}
 }
