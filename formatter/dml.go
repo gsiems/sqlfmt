@@ -610,7 +610,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				default:
 					switch e.Dialect() {
 					case dialect.SQLite:
-						switch ctVal {
+						switch pTok.AsUpper() {
 						case "REPLACE":
 						// nada
 						default:
@@ -897,7 +897,11 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				default:
 					localIndents = 1
 				}
-
+			default:
+				switch ctVal {
+				case "VALUES":
+					localIndents = 1
+				}
 			}
 
 			indents += localIndents
