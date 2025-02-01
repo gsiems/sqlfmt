@@ -11,6 +11,8 @@ func tagPLx(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	switch e.Dialect() {
 	case dialect.PostgreSQL:
 		return tagPgPL(e, m, bagMap)
+	case dialect.SQLite:
+		return tagSQLiteTrigger(e, m, bagMap)
 	case dialect.Oracle:
 		return tagOraPL(m, bagMap)
 	}
@@ -22,6 +24,8 @@ func formatPLxBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 	switch e.Dialect() {
 	case dialect.PostgreSQL:
 		formatPgPL(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
+	case dialect.SQLite:
+		formatSQLiteTrigger(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
 	//case dialect.Oracle:
 	//	formatOraPL(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
 	}

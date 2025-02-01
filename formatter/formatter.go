@@ -33,7 +33,7 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken, []strin
 	// TODO: for now at least. need to revisit once other DBs (especially
 	// Oracle) are better sorted
 	switch e.Dialect() {
-	case dialect.PostgreSQL:
+	case dialect.PostgreSQL, dialect.SQLite:
 		remainder = tagPLx(e, remainder, bagMap)
 	}
 	remainder = tagDDL(e, remainder, bagMap)
