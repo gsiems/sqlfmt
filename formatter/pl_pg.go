@@ -443,15 +443,13 @@ func formatPgPLBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 
 		switch tokens[idx].AsUpper() {
 		case "AND", "ANY", "AS", "ATOMIC", "BEGIN", "BETWEEN", "BREAK", "CASE",
-			"CLOSE", "CONCURRENTLY", "CONTINUE", "DECLARE", "DISTINCT", "ELSE",
-			"ELSEIF", "ELSIF", "END", "END CASE", "END IF", "END LOOP",
-			"EXECUTE", "EXCEPTION", "EXISTS", "EXIT", "FETCH", "FOR",
-			"FOREACH", "FOUND", "FROM", "GET", "IF", "IN", "INTO", "IS",
+			"CLOSE", "COMMIT", "CONCURRENTLY", "CONTINUE", "DECLARE",
+			"DISTINCT", "ELSE", "ELSEIF", "ELSIF", "END", "END CASE", "END IF",
+			"END LOOP", "EXCEPTION", "EXECUTE", "EXISTS", "EXIT", "FETCH",
+			"FOR", "FOREACH", "FOUND", "FROM", "GET", "IF", "IN", "INTO", "IS",
 			"LIKE", "LOOP", "MATERIALIZED", "NEXT", "NOT", "NULL", "OPEN",
-			"OR", "QUERY", "RAISE", "REFRESH", "RETURN", "SETOF", "THEN",
-			"VIEW", "WHEN", "WHILE":
-
-			//"SQLERRM", "SQLSTATE", "STACKED", "DIAGNOSTICS",
+			"OR", "QUERY", "RAISE", "REFRESH", "RETURN", "ROLLBACK", "SETOF",
+			"THEN", "VIEW", "WHEN", "WHILE":
 
 			tokens[idx].SetUpper()
 
@@ -483,6 +481,7 @@ func formatPgPLNonBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 	for idx := 0; idx <= idxMax; idx++ {
 
 		switch tokens[idx].AsUpper() {
+
 		case "AFTER", "AND", "AS", "BEFORE", "CALLED", "CONSTRAINT", "COST",
 			"CREATE", "CURRENT", "DEFAULT", "DEFERRABLE", "DEFERRED",
 			"DEFINER", "DELETE", "DISTINCT", "DO", "EACH", "EXECUTE",
