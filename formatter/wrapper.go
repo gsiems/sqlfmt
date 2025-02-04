@@ -1882,7 +1882,12 @@ func wrapPLxCalls(e *env.Env, bagType, mxPd int, tokens []FmtToken) []FmtToken {
 							switch {
 							case tpd == pdl:
 								switch tokens[i-1].value {
-								case "(", ",":
+								case "(":
+									if i == idxStart+1 {
+										tokens[i].EnsureVSpace()
+										tokens[i].AdjustIndents(tpi + tpd)
+									}
+								case ",":
 									tokens[i].EnsureVSpace()
 									tokens[i].AdjustIndents(tpi + tpd)
 								default:
