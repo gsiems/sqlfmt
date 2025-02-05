@@ -756,29 +756,11 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	lineLen := 0
 	indents := 0
 
-	if tokens[0].vSpace > 0 {
-		lineLen = calcLenToLineEnd(e, bagType, tokens)
-		indents = calcIndent(bagType, tokens[0])
-
-		//switch tokens[0].AsUpper() {
-		//case "SELECT":
-		//	indents++
-		//}
-	}
-
 	for idx := 0; idx <= idxMax; idx++ {
 
 		if tokens[idx].vSpace > 0 {
-			lineLen = calcLenToLineEnd(e, bagType, tokens)
+			lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 			indents = calcIndent(bagType, tokens[idx])
-			//if idx > 0 {
-			//	switch tokens[idx].AsUpper() {
-			//	case "SELECT":
-			//		indents++
-			//	case "WHERE", "ON":
-			//		indents--
-			//	}
-			//}
 		}
 
 		switch {
@@ -830,7 +812,6 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 			}
 
 			lCnt = 0
-			//oCnt = 0
 			idxStart = idx
 		}
 		if tokens[idx].IsKeyword() {
