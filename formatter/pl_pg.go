@@ -370,7 +370,7 @@ func pgParamLabel(objType, paramLabel string, pTok, cTok, nTok FmtToken) string 
 		switch ctVal {
 		case "TRIGGER":
 			return "TYPE"
-		case "BEFORE", "AFTER", "INSTEAD":
+		case "BEFORE", "AFTER", "INSTEAD OF":
 			return "EVENT"
 		case "ON":
 			return "TABLE"
@@ -486,7 +486,7 @@ func formatPgPLNonBodyKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 			"CREATE", "CURRENT", "DEFAULT", "DEFERRABLE", "DEFERRED",
 			"DEFINER", "DELETE", "DISTINCT", "DO", "EACH", "EXECUTE",
 			"EXTERNAL", "FOR", "FROM", "FUNCTION", "IMMEDIATE", "IMMUTABLE",
-			"INITIALLY", "INPUT", "INSERT", "INSTEAD", "INVOKER", "IS",
+			"INITIALLY", "INPUT", "INSERT", "INSTEAD OF", "INVOKER", "IS",
 			"LANGUAGE", "LEAKPROOF", "NEW", "NOT", "NULL", "OF", "OLD", "ON",
 			"OR", "PARALLEL", "PROCEDURE", "REFERENCING", "REPLACE",
 			"RESTRICTED", "RETURNS", "ROW", "ROWS", "SAFE", "SECURITY", "SET",

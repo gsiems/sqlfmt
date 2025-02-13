@@ -305,6 +305,11 @@ func consolidateMWTokens(e *env.Env, tokens []FmtToken) []FmtToken {
 				case "VALUES":
 					combineNext = true
 				}
+			case "INSTEAD":
+				switch tokens[idx+1].AsUpper() {
+				case "OF":
+					combineNext = true
+				}
 			}
 
 			if combineNext {
