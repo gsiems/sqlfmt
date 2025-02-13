@@ -297,7 +297,12 @@ func formatDDLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		switch ctVal {
 		case "AND", "OR", "NOT", "NULL":
 			cTok.SetUpper()
-		case "IS", "DISTINCT":
+		case "IS":
+			switch e.Dialect() {
+			case dialect.PostgreSQL, dialect.Oracle:
+				cTok.SetUpper()
+			}
+		case "DISTINCT":
 			switch e.Dialect() {
 			case dialect.PostgreSQL:
 				cTok.SetUpper()

@@ -21,6 +21,13 @@ func (s *plStack) IsEmpty() bool {
 	return len(s.stk) < 1
 }
 
+func (s *plStack) First() (v string) {
+	if s.Length() > 0 {
+		v = s.stk[0]
+	}
+	return v
+}
+
 func (s *plStack) Last() (v string) {
 	iMax := s.Length() - 1
 	if iMax >= 0 {
@@ -87,13 +94,17 @@ func (s *plStack) Set(v string) {
 func (s *plStack) Upsert(v string) {
 
 	switch v {
-	case "FUNCTION", "PACKAGE", "PROCEDURE", "TRIGGER", "IS", "AS", "DECLARE":
+	case "FUNCTION", "PACKAGE", "PACKAGE BODY", "PROCEDURE", "TRIGGER", "TYPE BODY":
+		s.Push(v)
+	case "IS", "AS", "DECLARE":
 		s.Push(v)
 
 	case "BEGIN":
 		if s.Length() > 0 {
 			switch s.Last() {
-			case "FUNCTION", "PACKAGE", "PROCEDURE", "TRIGGER", "IS", "AS", "DECLARE":
+			case "FUNCTION", "PACKAGE", "PACKAGE BODY", "PROCEDURE", "TRIGGER", "TYPE BODY":
+				s.Set(v)
+			case "IS", "AS", "DECLARE":
 				s.Set(v)
 			default:
 				s.Push(v)

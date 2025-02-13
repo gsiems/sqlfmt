@@ -26,7 +26,7 @@ func formatPLxBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		formatPgPL(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
 	case dialect.SQLite:
 		formatSQLiteTrigger(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
-	//case dialect.Oracle:
-	//	formatOraPL(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
+	case dialect.Oracle:
+		formatOraPL(e, bagMap, bagType, bagId, baseIndents, forceInitVSpace)
 	}
 }

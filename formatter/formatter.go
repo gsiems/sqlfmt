@@ -33,7 +33,7 @@ func tagBags(e *env.Env, m []FmtToken) (map[string]TokenBag, []FmtToken, []strin
 	// TODO: for now at least. need to revisit once other DBs (especially
 	// Oracle) are better sorted
 	switch e.Dialect() {
-	case dialect.PostgreSQL, dialect.SQLite:
+	case dialect.PostgreSQL, dialect.SQLite, dialect.Oracle:
 		remainder = tagPLx(e, remainder, bagMap)
 	}
 	remainder = tagDDL(e, remainder, bagMap)
@@ -305,9 +305,19 @@ func consolidateMWTokens(e *env.Env, tokens []FmtToken) []FmtToken {
 				case "VALUES":
 					combineNext = true
 				}
+			case "PACKAGE", "TYPE":
+				switch tokens[idx+1].AsUpper() {
+				case "BODY":
+					combineNext = true
+				}
 			case "INSTEAD":
 				switch tokens[idx+1].AsUpper() {
 				case "OF":
+					combineNext = true
+				}
+			case "BULK":
+				switch tokens[idx+1].AsUpper() {
+				case "COLLECT":
 					combineNext = true
 				}
 			}
