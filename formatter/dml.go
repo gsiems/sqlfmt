@@ -413,27 +413,27 @@ func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 		ctVal := cTok.AsUpper()
 
 		switch ctVal {
-		case "ALL", "AND", "ANY", "AS", "ASC", "BETWEEN", "BY", "CASCADE",
-			"CASE", "COLLATE", "CONCURRENTLY", "CONFLICT", "CONSTRAINT",
-			"CROSS", "CURRENT", "DATA", "DEFAULT", "DELETE", "DESC",
-			"DISTINCT", "DO", "ELSE", "END", "EXCEPT", "EXISTS", "FETCH",
-			"FIRST", "FOR", "FOR UPDATE", "FROM", "FULL", "GROUP", "HAVING",
-			"IDENTITY", "IN", "INNER", "INSERT", "INTERSECT", "INTO", "IS",
-			"JOIN", "LAST", "LATERAL", "LEFT", "LIKE", "LIMIT", "MATCHED",
-			"MATERIALIZED", "MERGE INTO", "MINUS", "NATURAL", "NEXT", "NFC",
-			"NFD", "NFKC", "NFKD", "NO", "NORMALIZED", "NOT", "NOTHING",
-			"NOWAIT", "NULL", "NULLS", "OF", "OFFSET", "ON", "ON CONFLICT",
-			"ONLY", "OR", "ORDER", "ORDER BY", "OUTER", "OVER", "OVERRIDING",
-			"PARTITION", "PARTITION BY", "RECURSIVE", "REFRESH", "REINDEX",
-			"RESTART", "RETURNING", "RIGHT", "ROW", "ROWS", "SELECT", "SET",
-			"SHARE", "SOURCE", "SYSTEM", "TABLE", "TARGET", "TEMP",
-			"TEMPORARY", "THEN", "TRUNCATE", "UNION", "UNIQUE", "UNLOGGED",
-			"UPDATE", "UPSERT", "USING", "VALUE", "VALUES", "VIEW", "WHEN",
-			"WHERE", "WINDOW", "WITH", "WITHIN", "GROUP BY":
+		case "ALL", "AND", "ANY", "AS", "ASC", "BETWEEN", "BULK COLLECT", "BY",
+			"CASCADE", "CASE", "COLLATE", "CONCURRENTLY", "CONFLICT",
+			"CONSTRAINT", "CROSS", "CURRENT", "DATA", "DEFAULT", "DELETE",
+			"DESC", "DISTINCT", "DO", "ELSE", "END", "EXCEPT", "EXISTS",
+			"FETCH", "FIRST", "FOR", "FOR UPDATE", "FROM", "FULL", "GROUP",
+			"HAVING", "IDENTITY", "IN", "INNER", "INSERT", "INTERSECT", "INTO",
+			"IS", "JOIN", "LAST", "LATERAL", "LEFT", "LIKE", "LIMIT",
+			"MATCHED", "MATERIALIZED", "MERGE INTO", "MINUS", "NATURAL",
+			"NEXT", "NFC", "NFD", "NFKC", "NFKD", "NO", "NORMALIZED", "NOT",
+			"NOTHING", "NOWAIT", "NULL", "NULLS", "OF", "OFFSET", "ON",
+			"ON CONFLICT", "ONLY", "OR", "ORDER", "ORDER BY", "OUTER", "OVER",
+			"OVERRIDING", "PARTITION", "PARTITION BY", "RECURSIVE", "REFRESH",
+			"REINDEX", "RESTART", "RETURNING", "RIGHT", "ROW", "ROWS",
+			"SELECT", "SET", "SHARE", "SOURCE", "SYSTEM", "TABLE", "TARGET",
+			"TEMP", "TEMPORARY", "THEN", "TRUNCATE", "UNION", "UNIQUE",
+			"UNLOGGED", "UPDATE", "UPSERT", "USING", "VALUE", "VALUES", "VIEW",
+			"WHEN", "WHERE", "WINDOW", "WITH", "WITHIN", "GROUP BY":
 
-			if cTok.IsKeyword() {
-				cTok.SetUpper()
-			}
+			//if cTok.IsKeyword() {
+			cTok.SetUpper()
+			//}
 		}
 
 		switch e.Dialect() {
@@ -706,6 +706,21 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			}
 		}
 
+
+
+		switch ctVal {
+		case "BULK COLLECT":
+			ensureVSpace = true
+
+		case "INTO":
+			switch pKwVal {
+			case "BULK COLLECT", "INSERT": //, "RETURNING":
+				// nada
+			default:
+				ensureVSpace = true
+			}
+		}
+
 		switch {
 		case pTok.IsBag():
 			bk := bagKey(pTok.typeOf, pTok.id)
@@ -749,8 +764,9 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				switch ctVal {
 				case "SELECT", "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
 					// nada
-				case "INTO", "FROM", "WHERE", "GROUP", "HAVING", "WINDOW", "ORDER",
-					"OFFSET", "LIMIT", "FETCH", "FOR", "WITH", "FOR UPDATE":
+				case "BULK COLLECT", "INTO", "FROM", "WHERE", "GROUP", "HAVING",
+					"WINDOW", "ORDER", "OFFSET", "LIMIT", "FETCH", "FOR",
+					"WITH", "FOR UPDATE":
 					localIndents = 1
 				case "GROUP BY", "ORDER BY", "PARTITION BY":
 					localIndents = 1
