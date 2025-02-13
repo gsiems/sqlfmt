@@ -17,7 +17,7 @@ func tagSQLiteTrigger(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []Fm
 	var bagTokens []FmtToken
 	isInBag := false
 	bagId := 0
-    pKwVal := ""
+	pKwVal := ""
 
 	for _, cTok := range m {
 
@@ -135,7 +135,7 @@ func formatSQLiteTrigger(e *env.Env, bagMap map[string]TokenBag, bagType, bagId,
 	idxMax := len(tokens) - 1
 
 	var tFormatted []FmtToken
-    ptVal := ""
+	ptVal := ""
 
 	for idx := 0; idx <= idxMax; idx++ {
 
@@ -160,7 +160,7 @@ func formatSQLiteTrigger(e *env.Env, bagMap map[string]TokenBag, bagType, bagId,
 
 		switch cTok.AsUpper() {
 		case "BEFORE", "AFTER", "INSTEAD", "INSTEAD OF", "DELETE", "INSERT",
-            "UPDATE", "FOR", "ON":
+			"UPDATE", "FOR", "ON":
 			if cTok.vSpace > 0 {
 				cTok.AdjustIndents(1)
 			} else {
