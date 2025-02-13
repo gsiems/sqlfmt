@@ -543,14 +543,6 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 		// Determine the indentation level
 		indents := baseIndents + parensDepth + bbStack.Indents()
 
-/*
-        EXECUTE IMMEDIATE 'select ' || a_function_name || '( :1,:2,:3,:4,:5 ) from dual'
-            INTO l_project_number
-        USING a_ai_id, a_activity_class, a_activity_year, a_activity_number, l_blank_template ;
-
-*/
-
-
 		if cTok.vSpace > 0 {
 
 			switch bbStack.Last() {
