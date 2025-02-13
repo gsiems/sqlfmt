@@ -1,9 +1,5 @@
 package formatter
 
-import (
-	"github.com/gsiems/sqlfmt/env"
-)
-
 type plObj struct {
 	id         int
 	objType    string
@@ -35,7 +31,7 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 		switch ctVal {
 		case "FUNCTION", "PROCEDURE", "TRIGGER", "PACKAGE", "PACKAGE BODY", "TYPE BODY":
-			switch pWkVal {
+			switch pKwVal {
 			case "DROP", "ALTER":
 				// nada
 			default:
@@ -136,8 +132,8 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 			nt := FmtToken{
 				id:          cTok.id,
-				categoryOf:  PLxBag,
-				typeOf:      PLxBag,
+				categoryOf:  PLxBody,
+				typeOf:      PLxBody,
 				vSpace:      cTok.vSpace,
 				indents:     cTok.indents,
 				hSpace:      cTok.hSpace,
@@ -170,10 +166,10 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	// If the token map is not empty (PL was found and tagged) then populate
 	// the bagMap
 	for id, tokens := range tokMap {
-		key := bagKey(PLxBag, id)
+		key := bagKey(PLxBody, id)
 		bagMap[key] = TokenBag{
 			id:     id,
-			typeOf: PLxBag,
+			typeOf: PLxBody,
 			tokens: tokens,
 		}
 	}
