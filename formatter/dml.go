@@ -76,27 +76,6 @@ func (s *dmlFmtStat) deleteClause() {
 	}
 }
 
-func getBId(bagIds map[int]int, parensDepth int) int {
-
-	// Get the most current bag ID, if needed/available
-	// Problem: There won't be a valid bag ID for all parensDepths and
-	// increasing the parensDepth doesn't signify that a new bag is needed.
-	// So what IS needed is to backtrack up from the parensDepth until a valid
-	// bagId is found.
-	// This requires that the bagId entries be cleared up as the parensDepth is
-	// decreased or when a bag is closed.
-
-	pd := parensDepth
-	testId := 0
-	for pd >= 0 && testId == 0 {
-		if bi, ok := bagIds[pd]; ok {
-			testId = bi
-		}
-		pd--
-	}
-	return testId
-}
-
 // tagDML ensures that DML commands (SELECT, INSERT, etc.) are properly tagged
 func tagDML(e *env.Env, m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
