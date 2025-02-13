@@ -182,6 +182,7 @@ func adjustCommentIndents(bagType int, tokens *[]FmtToken) {
 
 	ledIndents := 0
 	trlIndents := 0
+	pkoi := ""
 	idxMax := len((*tokens))
 	for idx := 0; idx < idxMax; idx++ {
 		if (*tokens)[idx].vSpace > 0 {
@@ -214,8 +215,19 @@ func adjustCommentIndents(bagType int, tokens *[]FmtToken) {
 					switch (*tokens)[idx].AsUpper() {
 					case "ELSE", "END IF", "END CASE", "END LOOP", "END":
 						ledIndents++
-					case "EXCEPTION", "BEGIN":
+					case "EXCEPTION":
 						ledIndents++
+					case "BEGIN":
+						switch pkoi {
+						case "IS", "AS", "DECLARE":
+							ledIndents++
+						}
+						trlIndents++
+					}
+
+					switch (*tokens)[idx].AsUpper() {
+					case "IS", "AS", "DECLARE", "BEGIN", "END":
+						pkoi = (*tokens)[idx].AsUpper()
 					}
 				}
 			}
