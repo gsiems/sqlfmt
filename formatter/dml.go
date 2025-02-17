@@ -584,7 +584,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					// nada
 				case cat.currentClause() == "RETURNING":
 					// nada
-				case pTok.AsUpper() == "MERGE":
+				case pTok.AsUpper() == "MERGE INTO":
 					// nada
 				default:
 					switch e.Dialect() {
@@ -705,8 +705,6 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				ensureVSpace = true
 			}
 		}
-
-
 
 		switch ctVal {
 		case "BULK COLLECT":
