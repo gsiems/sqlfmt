@@ -617,6 +617,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 				case "WITH", "SELECT":
 					ensureVSpace = true
 				}
+				switch pTok.value {
+				case ")":
+					ensureVSpace = true
+				}
 
 			case "SET":
 				//switch cat.primaryAction() {
