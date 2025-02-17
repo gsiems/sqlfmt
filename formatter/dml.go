@@ -684,7 +684,13 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					ensureVSpace = true
 				}
 			}
-
+		case "FROM":
+			switch pTok.value {
+			case ",":
+				if cat.parensDepth() == 0 {
+					ensureVSpace = true
+				}
+			}
 		case "VALUES":
 			switch ctVal {
 			case cat.currentClause():
