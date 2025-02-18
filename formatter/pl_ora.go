@@ -37,7 +37,7 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 		case "FUNCTION", "PROCEDURE", "TRIGGER", "PACKAGE", "PACKAGE BODY", "TYPE BODY":
 			switch pKwVal {
 			case "DROP", "ALTER":
-				// nada
+				remainder = append(remainder, cTok)
 			default:
 				openBag = true
 			}
