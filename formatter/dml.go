@@ -867,11 +867,22 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					localIndents = 2
 				case "INSERT", "UPDATE", "DELETE":
 					localIndents = 2
-				case "SET", "VALUES", "RETURNING":
+				case "SET", "VALUES", "RETURNING", "WHERE":
 					localIndents = 3
+				case ")":
+					localIndents = 3
+					indents--
+					switch pKwVal {
+					case "USING":
+						localIndents--
+					}
 				default:
 					localIndents = 4
 				}
+				if cat.parensDepth() > 1 {
+					localIndents--
+				}
+
 			case "DELETE":
 				switch ctVal {
 				case "DELETE":

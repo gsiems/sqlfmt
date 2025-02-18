@@ -755,12 +755,14 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 	lCnt := 0
 	lineLen := 0
 	indents := 0
+	isOn := false
 
 	for idx := 0; idx <= idxMax; idx++ {
 
 		if tokens[idx].vSpace > 0 {
 			lineLen = calcLenToLineEnd(e, bagType, tokens[idx:])
 			indents = calcIndent(bagType, tokens[idx])
+			isOn = tokens[idx].AsUpper() == "ON"
 		}
 
 		switch {
@@ -800,7 +802,11 @@ func wrapDMLLogical(e *env.Env, bagType int, tokens []FmtToken) []FmtToken {
 						if isLogical(pkv, tokens[i]) {
 							if tokens[i].vSpace == 0 {
 								tokens[i].EnsureVSpace()
-								tokens[i].indents = indents + ipd + 1
+								if isOn {
+									tokens[i].indents = indents + ipd
+								} else {
+									tokens[i].indents = indents + ipd + 1
+								}
 							}
 						}
 					}
