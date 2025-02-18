@@ -622,6 +622,21 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 			}
 		}
 
+		// set the line wrapping break points
+		switch {
+		case cTok.vSpace == 0:
+			// nada
+		case cTok.IsKeyword():
+			cTok.fbp = true
+		case pTok.IsKeyword():
+			cTok.fbp = true
+		default:
+			switch ptVal {
+			case "THEN", ";":
+				cTok.fbp = true
+			}
+		}
+
 		if cTok.IsKeyword() {
 			pKwVal = cTok.AsUpper()
 		}
