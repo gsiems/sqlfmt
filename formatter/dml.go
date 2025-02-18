@@ -807,7 +807,8 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					case "SELECT", "ALL", "EXCEPT", "INTERSECT", "MINUS", "UNION":
 						localIndents = 1
 					case "FROM", "WHERE", "GROUP", "HAVING", "WINDOW", "ORDER",
-						"OFFSET", "LIMIT", "FETCH", "FOR", "WITH", "RETURNING":
+						"OFFSET", "LIMIT", "FETCH", "FOR", "WITH", "RETURNING",
+						"INTO":
 						localIndents = 2
 					case "GROUP BY", "ORDER BY":
 						localIndents = 2
