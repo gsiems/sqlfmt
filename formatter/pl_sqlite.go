@@ -107,8 +107,8 @@ func formatSQLiteTriggerKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 	for idx := 0; idx <= idxMax; idx++ {
 		switch tokens[idx].AsUpper() {
 		case "AFTER", "BEFORE", "BEGIN", "DELETE", "EACH", "END", "EXISTS",
-			"FOR", "IF", "INSERT", "INSTEAD", "INSTEAD OF", "NOT", "OF", "ON",
-			"ROW", "TRIGGER", "UPDATE", "WHEN":
+			"FOR", "IF", "INSERT", "INSTEAD OF", "NOT", "OF", "ON", "ROW",
+			"TRIGGER", "UPDATE", "WHEN":
 
 			tokens[idx].SetUpper()
 
@@ -143,7 +143,7 @@ func formatSQLiteTrigger(e *env.Env, bagMap map[string]TokenBag, bagType, bagId,
 
 		cTok := tokens[idx]
 		switch cTok.AsUpper() {
-		case "BEFORE", "AFTER", "INSTEAD":
+		case "BEFORE", "AFTER", "INSTEAD OF":
 			ensureVSpace = true
 		case "DELETE", "INSERT", "UPDATE":
 			switch ptVal {
@@ -159,8 +159,8 @@ func formatSQLiteTrigger(e *env.Env, bagMap map[string]TokenBag, bagType, bagId,
 		cTok.AdjustVSpace(ensureVSpace, false)
 
 		switch cTok.AsUpper() {
-		case "BEFORE", "AFTER", "INSTEAD", "INSTEAD OF", "DELETE", "INSERT",
-			"UPDATE", "FOR", "ON":
+		case "BEFORE", "AFTER", "INSTEAD OF", "DELETE", "INSERT", "UPDATE",
+			"FOR", "ON":
 			if cTok.vSpace > 0 {
 				cTok.AdjustIndents(1)
 			} else {
