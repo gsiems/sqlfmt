@@ -584,17 +584,19 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					// nada
 				case cat.currentClause() == "RETURNING":
 					// nada
-				case pTok.AsUpper() == "MERGE INTO":
-					// nada
-				default:
+				//case pTok.AsUpper() == "MERGE INTO":
+				//	// nada
+				case pTok.AsUpper() == "REPLACE":
 					switch e.Dialect() {
 					case dialect.SQLite:
-						switch pTok.AsUpper() {
-						case "REPLACE":
 						// nada
-						default:
-							ensureVSpace = true
-						}
+					default:
+						ensureVSpace = true
+					}
+				default:
+					switch pKwVal {
+					case "BULK COLLECT", "INSERT": //, "RETURNING":
+						// nada
 					default:
 						ensureVSpace = true
 					}
@@ -837,7 +839,11 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 							localIndents = 3
 						}
 					}
-
+				case "WITH":
+					switch ctVal {
+					case ")":
+						localIndents = 1
+					}
 				default:
 					switch {
 					case onConflict:
