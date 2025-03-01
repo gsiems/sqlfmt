@@ -450,7 +450,7 @@ func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 			}
 		case dialect.Oracle:
 			switch ctVal {
-			case "CONNECT", "LEVEL":
+			case "CONNECT", "LEVEL", "CONNECT BY", "START WITH":
 				cTok.SetUpper()
 			}
 		}
@@ -719,6 +719,10 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 		switch ctVal {
 		case "BULK COLLECT":
 			ensureVSpace = true
+		case "CONNECT BY":
+			ensureVSpace = true
+		case "START WITH":
+			ensureVSpace = true
 
 		case "INTO":
 			switch pKwVal {
@@ -781,7 +785,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					"WINDOW", "ORDER", "OFFSET", "LIMIT", "FETCH", "FOR",
 					"WITH", "FOR UPDATE":
 					localIndents = 1
-				case "GROUP BY", "ORDER BY", "PARTITION BY":
+				case "GROUP BY", "ORDER BY", "PARTITION BY", "CONNECT BY", "START WITH":
 					localIndents = 1
 				case "CROSS", "FULL", "INNER", "JOIN", "LATERAL", "LEFT",
 					"NATURAL", "OUTER", "RIGHT":
