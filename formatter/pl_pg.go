@@ -547,15 +547,13 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 		ctVal := cTok.AsUpper()
 
 		////////////////////////////////////////////////////////////////
-		// Update the block/branch stack
+		// Update (push) the block/branch stack
 		switch ctVal {
 		case "DECLARE", "BEGIN", "EXCEPTION":
 			bbStack.Upsert(ctVal)
 		case "IF", "LOOP", "CASE":
 			// WHILE/FOR vs. LOOP???
 			bbStack.Push(ctVal)
-		case "END", "END CASE", "END IF", "END LOOP":
-			_ = bbStack.Pop()
 		}
 
 		////////////////////////////////////////////////////////////////
@@ -598,14 +596,20 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			case ",", ")":
 				// nada
 			default:
-				ensureVSpace = true
+				switch bbStack.Last() {
+				case "CASE":
+					// nada
+				default:
+					ensureVSpace = true
+				}
 			}
 		case "FOR":
 			switch pKwVal {
 			case "OPEN":
 				// nada
 			default:
-				ensureVSpace = true
+				//ensureVSpace = true
+				ensureVSpace = parensDepth == 0
 			}
 		case "EXECUTE":
 			switch ptVal {
@@ -748,6 +752,13 @@ func formatPgPLBody(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, base
 			ensureVSpace = true
 		case cTok.IsLabel(), cTok.IsBag():
 			honorVSpace = true
+		}
+
+		////////////////////////////////////////////////////////////////
+		// Update (pop) the block/branch stack
+		switch ctVal {
+		case "END", "END CASE", "END IF", "END LOOP":
+			_ = bbStack.Pop()
 		}
 
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
