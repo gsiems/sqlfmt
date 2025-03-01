@@ -5,11 +5,11 @@ import (
 )
 
 type plObj struct {
-	id         int
-	objType    string
-	hasIs      bool
-	hasLang    bool
-	beginDepth int
+	id      int
+	objType string
+	hasIs   bool
+	hasLang bool
+	depth   int
 }
 
 // tagOraPL ensures that the DDL for creating Oracle functions, procedures,
@@ -26,9 +26,11 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 	pKwVal := ""
 	plCnt := 0
 	objs := make(map[int]plObj)
+	idxMax := len(m) - 1
 
-	for _, cTok := range m {
+	for idx := 0; idx <= idxMax; idx++ {
 
+		cTok := m[idx]
 		ctVal := cTok.AsUpper()
 		openBag := false
 		closeBag := false
@@ -42,46 +44,43 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 				openBag = true
 			}
 		default:
-			if plCnt > 0 {
+			switch {
+			case plCnt == 0:
+				switch ctVal {
+				case "DECLARE", "BEGIN":
+					openBag = true
+				default:
+					remainder = append(remainder, cTok)
+				}
+			case plCnt > 0:
 				tokMap[bagId] = append(tokMap[bagId], cTok)
 
 				switch ctVal {
-				case "IS", "AS":
-					if _, ok := objs[plCnt]; ok {
-						n := objs[plCnt]
-						n.hasIs = true
-						objs[plCnt] = n
+				case "BEGIN", "IF", "LOOP", "CASE":
+					if obj, ok := objs[plCnt]; ok {
+						obj.depth++
+						objs[plCnt] = obj
+					}
+				case "END", "END CASE", "END IF", "END LOOP":
+					if obj, ok := objs[plCnt]; ok {
+						obj.depth--
+						objs[plCnt] = obj
 					}
 				case "LANGUAGE":
-					if _, ok := objs[plCnt]; ok {
-						n := objs[plCnt]
-						n.hasLang = true
-						objs[plCnt] = n
+					if obj, ok := objs[plCnt]; ok {
+						obj.hasLang = true
+						objs[plCnt] = obj
 					}
-				case "DECLARE":
-					if _, ok := objs[plCnt]; !ok {
-						openBag = true
+				case "IS", "AS":
+					if obj, ok := objs[plCnt]; ok {
+						obj.hasIs = true
+						objs[plCnt] = obj
 					}
-				case "BEGIN":
-					_, ok := objs[plCnt]
-					if ok {
-						n := objs[plCnt]
-						n.beginDepth++
-						objs[plCnt] = n
-					} else {
-						openBag = true
-					}
-				case "END":
-					if _, ok := objs[plCnt]; ok {
-						n := objs[plCnt]
-						n.beginDepth--
-						objs[plCnt] = n
-					}
-				case ";":
+				case ";", "/":
 					if obj, ok := objs[plCnt]; ok {
 						switch {
 						case pKwVal == "END":
-							if obj.beginDepth <= 0 {
+							if obj.depth <= 0 {
 								closeBag = true
 							}
 						case obj.hasLang:
@@ -90,13 +89,6 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 							closeBag = true
 						}
 					}
-				}
-			} else {
-				switch ctVal {
-				case "DECLARE", "BEGIN":
-					openBag = true
-				default:
-					remainder = append(remainder, cTok)
 				}
 			}
 		}
@@ -132,7 +124,7 @@ func tagOraPL(m []FmtToken, bagMap map[string]TokenBag) []FmtToken {
 
 			bagId = cTok.id
 			plCnt++
-			objs[plCnt] = plObj{id: cTok.id, objType: ctVal, hasIs: hasIs, hasLang: false, beginDepth: bd}
+			objs[plCnt] = plObj{id: cTok.id, objType: ctVal, hasIs: hasIs, hasLang: false, depth: bd}
 
 			nt := FmtToken{
 				id:          cTok.id,
@@ -199,11 +191,11 @@ func formatOraPLKeywords(e *env.Env, objType string, tokens []FmtToken) []FmtTok
 			"DISTINCT", "ELSE", "ELSEIF", "ELSIF", "END", "END CASE", "END IF",
 			"END LOOP", "EXECUTE", "EXCEPTION", "EXISTS", "EXIT", "FETCH",
 			"FOR", "FORALL", "FOREACH", "FOUND", "FROM", "GET", "IF", "IN",
-			"INTO", "LIKE", "LOOP", "NEXT", "NOT", "NULL", "OF", "OPEN", "OR",
-			"IMMEDIATE", "RAISE", "REFRESH", "RETURN", "THEN", "VIEW", "WHEN",
-			"WHILE", "FUNCTION", "PROCEDURE", "OUT", "PACKAGE", "PACKAGE BODY",
-			"PRAGMA", "RECORD", "TABLE", "TYPE BODY", "VALUES", "TYPE",
-			"COMMIT", "ROLLBACK", "USING":
+			"INDEX BY", "INTO", "LIKE", "LOOP", "NEXT", "NOT", "NULL", "OF",
+			"OPEN", "OR", "IMMEDIATE", "RAISE", "REFRESH", "RETURN", "THEN",
+			"VIEW", "WHEN", "WHILE", "FUNCTION", "PROCEDURE", "OUT", "PACKAGE",
+			"PACKAGE BODY", "PRAGMA", "RECORD", "TABLE", "TYPE BODY", "VALUES",
+			"TYPE", "COMMIT", "ROLLBACK", "USING":
 
 			tokens[idx].SetUpper()
 		}
@@ -248,7 +240,6 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 	var bbStack plStack
 	bCnt := 0
 	sigStat := 0
-
 	var tFormatted []FmtToken
 	pKwVal := ""
 
@@ -258,7 +249,7 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 		ctVal := cTok.AsUpper()
 
 		////////////////////////////////////////////////////////////////
-		// Update the block/branch stack
+		// Update (push) the block/branch stack
 		switch ctVal {
 		case "TRIGGER", "PACKAGE", "PACKAGE BODY", "TYPE BODY", "FUNCTION", "PROCEDURE":
 			bbStack.Push(ctVal)
@@ -267,8 +258,6 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 		case "IF", "LOOP", "CASE":
 			// WHILE/FOR vs. LOOP???
 			bbStack.Push(ctVal)
-		case "END", "END CASE", "END IF", "END LOOP":
-			_ = bbStack.Pop()
 		}
 
 		////////////////////////////////////////////////////////////////
@@ -305,7 +294,7 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 			switch sigStat {
 			case preSig:
 				switch ptVal {
-				case "AS", "IS":
+				case "AS", "IS", ":=":
 					sigStat = postSig
 				case "(":
 					sigStat = inSig
@@ -327,16 +316,18 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 			switch parensDepth {
 			case 0:
 				switch ctVal {
-				case "END", "SHARING", "AUTHID":
+				case "END":
+					switch bbStack.Last() {
+					case "CASE":
+						// nada
+					default:
+						ensureVSpace = true
+					}
+				case "SHARING", "AUTHID":
 					ensureVSpace = true
 				case "DEFAULT": // COLLATION
 					ensureVSpace = true
 				case "ACCESSIBLE": // BY
-					ensureVSpace = true
-				}
-			case 1:
-				switch ptVal {
-				case "(", ",":
 					ensureVSpace = true
 				}
 			}
@@ -430,11 +421,18 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 					ensureVSpace = true
 				}
 			case "END":
-				switch ntVal {
-				case ",", ")":
+
+				switch bbStack.Last() {
+				case "CASE":
 					// nada
 				default:
-					ensureVSpace = true
+
+					switch ntVal {
+					case ",", ")":
+						// nada
+					default:
+						ensureVSpace = true
+					}
 				}
 			case "FOR":
 				switch {
@@ -540,6 +538,13 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 		cTok.AdjustVSpace(ensureVSpace, honorVSpace)
 
 		////////////////////////////////////////////////////////////////
+		// Update (pop) the block/branch stack
+		switch ctVal {
+		case "END", "END CASE", "END IF", "END LOOP":
+			_ = bbStack.Pop()
+		}
+
+		////////////////////////////////////////////////////////////////
 		// Determine the indentation level
 		indents := baseIndents + parensDepth + bbStack.Indents()
 
@@ -632,7 +637,7 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 			cTok.fbp = true
 		default:
 			switch ptVal {
-			case "THEN", ";":
+			case "THEN", "ELSE", ";":
 				cTok.fbp = true
 			}
 		}
@@ -645,8 +650,6 @@ func formatOraPL(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseInd
 	}
 
 	tFormatted = wrapLines(e, bagType, tFormatted)
-
-	adjustCommentIndents(bagType, &tFormatted)
 
 	parensDepth = 0
 	indents := 0
