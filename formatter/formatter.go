@@ -275,9 +275,14 @@ func consolidateMWTokens(e *env.Env, tokens []FmtToken) []FmtToken {
 				case "IF", "CASE", "LOOP":
 					combineNext = true
 				}
-			case "GROUP", "ORDER", "PARTITION":
+			case "GROUP", "ORDER", "PARTITION", "CONNECT", "INDEX":
 				switch tokens[idx+1].AsUpper() {
 				case "BY":
+					combineNext = true
+				}
+			case "START":
+				switch tokens[idx+1].AsUpper() {
+				case "WITH":
 					combineNext = true
 				}
 			case "FROM":
