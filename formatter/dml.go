@@ -450,7 +450,7 @@ func formatDMLKeywords(e *env.Env, tokens []FmtToken) []FmtToken {
 			}
 		case dialect.Oracle:
 			switch ctVal {
-			case "CONNECT", "LEVEL", "CONNECT BY", "START WITH":
+			case "CONNECT", "LEVEL", "CONNECT BY", "START WITH", "PIVOT", "UNPIVOT":
 				cTok.SetUpper()
 			}
 		}
@@ -670,6 +670,16 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			}
 		}
 
+			switch cat.primaryAction() {
+			case "SELECT":
+				switch ctVal {
+				case "PIVOT", "UNPIVOT", "FOR":
+					ensureVSpace = true
+				}
+
+			}
+
+
 		switch cat.currentClause() {
 		case "WITH":
 			if ctVal == ")" {
@@ -707,7 +717,7 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 			switch pTok.value {
 			case ",":
 				if cat.parensDepth() == 0 {
-					cTok.fbp = true
+					//cTok.fbp = true
 					ensureVSpace = true
 				}
 			}
@@ -794,8 +804,15 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					localIndents = 1
 				case "VALUES":
 					localIndents = 1
-				case ")":
+				case "PIVOT", "UNPIVOT":
 					localIndents = 1
+				case ")":
+					switch {
+					case cat.currentAction() == "WITH":
+						localIndents = 0
+					default:
+						localIndents = 1
+					}
 				default:
 					switch {
 					case cat.currentAction() == "SELECT":
@@ -826,10 +843,23 @@ func formatDMLBag(e *env.Env, bagMap map[string]TokenBag, bagType, bagId, baseIn
 					case "ON":
 						localIndents = 3
 					case ")":
+
+
+
+
 						if pKwVal == "VALUES" {
 							localIndents = 2
 						} else {
-							localIndents = 2
+
+					switch {
+					case cat.currentAction() == "WITH":
+						localIndents = 1
+					default:
+						localIndents = 2
+					}
+
+
+							//localIndents = 2
 						}
 					default:
 						switch {
